@@ -12,7 +12,6 @@ from app.db.session import get_db
 from app.services.auth import (
     login_user,
     register_new_user,
-    verify_email_code_service,
     verify_phone_code_service,
     password_recovery_service,
 )

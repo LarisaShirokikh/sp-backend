@@ -10,7 +10,7 @@ from app.core import security
 from app.core.config import settings
 from app.crud.user import user as user_crud
 from app.db.session import get_db
-from app.models.user import UserRole
+from app.models.user import User
 from app.schemas.token import TokenPayload
 
 # URL для получения токена
@@ -21,27 +21,33 @@ reusable_oauth2 = OAuth2PasswordBearer(
 
 def get_current_user(
     db: Session = Depends(get_db), token: str = Depends(reusable_oauth2)
-) -> models.User:
+) -> User:
     """
-    Проверка JWT токена и получение текущего пользователя
+    Получение текущего аутентифицированного пользователя.
     """
     try:
         payload = jwt.decode(
             token, settings.SECRET_KEY, algorithms=[security.ALGORITHM]
         )
-        token_data = TokenPayload(**payload)
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Не удалось проверить учетные данные",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
     except (JWTError, ValidationError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Не удалось проверить учетные данные",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    user = user_crud.get(db, id=token_data.sub)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Пользователь не найден"
-        )
+    user = user_crud.get(db, id=int(user_id))
+    if user is None:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    if not user_crud.is_active(user):
+        raise HTTPException(status_code=400, detail="Пользователь неактивен")
+    
     return user
 
 

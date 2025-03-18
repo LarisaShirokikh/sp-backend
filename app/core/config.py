@@ -1,5 +1,6 @@
+import os
 from pydantic_settings import BaseSettings
-from pydantic import PostgresDsn, ValidationInfo, field_validator, EmailStr
+from pydantic import PostgresDsn, ValidationInfo, field_validator, EmailStr, validator
 from typing import Any, Dict, List, Optional, Union
 import secrets
 from pathlib import Path
@@ -10,11 +11,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = secrets.token_urlsafe(32)
+    ALGORITHM: str = "HS256"
     # 60 минут * 24 часа * 7 дней = 7 дней
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
     
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = ["*"]
+
+    # URL для фронтенда (используется в ссылках для верификации)
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
     # Настройки PostgreSQL
     POSTGRES_HOST: str
@@ -60,12 +65,47 @@ class Settings(BaseSettings):
     
     # Общие настройки приложения
     PROJECT_NAME: str = "Портал совместных закупок"
+
+    # Настройки для отправки email
+    # EMAIL_SENDER: EmailStr = os.getenv("EMAIL_SENDER", "noreply@example.com")
+    # SMTP_SERVER: str = os.getenv("SMTP_SERVER", "smtp.example.com")
+    # SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    # SMTP_USER: str = os.getenv("SMTP_USER", "user@example.com")
+    # SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "password")
+    
+    # Настройки для SMS
+    SMS_PROVIDER: str = os.getenv("SMS_PROVIDER", "sms.ru")  # или "smsc", "smsaero", "devino"
+    
+    # SMS.RU настройки
+    SMSRU_API_KEY: Optional[str] = os.getenv("SMSRU_API_KEY")
+    
+    # SMSC настройки
+    SMSC_LOGIN: Optional[str] = os.getenv("SMSC_LOGIN")
+    SMSC_PASSWORD: Optional[str] = os.getenv("SMSC_PASSWORD")
+    
+    # SMS Aero настройки
+    SMSAERO_EMAIL: Optional[str] = os.getenv("SMSAERO_EMAIL")
+    SMSAERO_API_KEY: Optional[str] = os.getenv("SMSAERO_API_KEY")
+    SMSAERO_SIGN: Optional[str] = os.getenv("SMSAERO_SIGN", "SMS Aero")
+    
+    # Devino Telecom настройки
+    DEVINO_API_KEY: Optional[str] = os.getenv("DEVINO_API_KEY")
+    DEVINO_SENDER: Optional[str] = os.getenv("DEVINO_SENDER", "Info")
+    
+    @field_validator("SMS_PROVIDER")
+    def validate_sms_provider(cls, v):
+        allowed_providers = ["sms.ru", "smsc", "smsaero", "devino"]
+        if v.lower() not in allowed_providers:
+            return "sms.ru"  # Установка по умолчанию, если указан неподдерживаемый провайдер
+        return v
     
     class Config:
         case_sensitive = True
         env_file = ".env"
         env_file_encoding = "utf-8"
         extra = "allow"
+
+
 
 
 settings = Settings()

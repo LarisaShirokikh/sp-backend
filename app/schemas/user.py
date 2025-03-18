@@ -1,3 +1,4 @@
+import re
 from pydantic import BaseModel, EmailStr, Field, field_validator, validator
 from typing import Optional
 from datetime import datetime
@@ -12,38 +13,56 @@ class BaseSchema(BaseModel):
 
 # Общие поля пользователя
 class UserBase(BaseSchema):
-    email: Optional[EmailStr] = None
+    """Базовая схема пользователя"""
+    email: EmailStr
+    name: str
     full_name: Optional[str] = None
     phone: Optional[str] = None
-    role: Optional[UserRole] = None
-    is_active: Optional[bool] = True
-    description: Optional[str] = None
-    avatar_url: Optional[str] = None
+    is_active: bool = True
+    is_verified: bool = False
+    is_phone_verified: bool = False
 
 
 # Схема для создания пользователя
-class UserCreate(BaseSchema):
+class UserCreate(BaseModel):
+    """Схема для создания пользователя"""
+    name: str
     email: EmailStr
-    password: str = Field(..., min_length=8)
+    password: str
     full_name: Optional[str] = None
-    phone: Optional[str] = None
-    role: Optional[UserRole] = UserRole.user
+    phone: str
     
-    @field_validator('password')
-    def password_complexity(cls, v):
-        # Проверка сложности пароля
+    @field_validator("password")
+    def password_min_length(cls, v):
         if len(v) < 8:
-            raise ValueError('Пароль должен быть не менее 8 символов')
-        if not any(char.isdigit() for char in v):
-            raise ValueError('Пароль должен содержать хотя бы одну цифру')
-        if not any(char.isupper() for char in v):
-            raise ValueError('Пароль должен содержать хотя бы одну заглавную букву')
+            raise ValueError("Пароль должен содержать минимум 8 символов")
         return v
+    
+    @field_validator("phone")
+    def validate_phone(cls, v):
+        if v is None:
+            return v
+            
+        # Очистка от пробелов, дефисов и пр.
+        cleaned = re.sub(r'[^0-9+]', '', v)
+        
+        # Проверка формата (должен начинаться с + или 7 или 8, всего 11-12 цифр)
+        if not re.match(r'^(\+7|7|8)\d{10}$', cleaned):
+            raise ValueError("Неверный формат номера телефона")
+        
+        # Приведение к формату 7XXXXXXXXXX
+        if cleaned.startswith("+7"):
+            return cleaned[1:]  # Убираем +
+        elif cleaned.startswith("8"):
+            return "7" + cleaned[1:]  # Заменяем 8 на 7
+        
+        return cleaned
 
 
 # Схема для обновления пользователя
 class UserUpdate(BaseSchema):
     email: Optional[EmailStr] = None
+    name: Optional[str] = None
     full_name: Optional[str] = None
     phone: Optional[str] = None
     description: Optional[str] = None
@@ -81,9 +100,44 @@ class UserAdminResponse(UserResponse):
 # Краткая информация о пользователе для публичных ответов
 class UserPublic(BaseSchema):
     id: int
+    name: str
     full_name: Optional[str]
     role: UserRole
     avatar_url: Optional[str]
     rating: Optional[int]
     followers_count: int
     following_count: int
+
+class UserVerifyPhone(BaseModel):
+    """Схема для верификации телефона"""
+    phone: str
+    code: str
+    
+    @field_validator("phone")
+    def validate_phone(cls, v):
+        # Очистка от пробелов, дефисов и пр.
+        cleaned = re.sub(r'[^0-9+]', '', v)
+        
+        # Проверка формата (должен начинаться с + или 7 или 8, всего 11-12 цифр)
+        if not re.match(r'^(\+7|7|8)\d{10}$', cleaned):
+            raise ValueError("Неверный формат номера телефона")
+        
+        # Приведение к формату 7XXXXXXXXXX
+        if cleaned.startswith("+7"):
+            return cleaned[1:]  # Убираем +
+        elif cleaned.startswith("8"):
+            return "7" + cleaned[1:]  # Заменяем 8 на 7
+        
+        return cleaned
+    
+    @field_validator("code")
+    def validate_code(cls, v):
+        # Проверяем, что код состоит из 6 цифр
+        if not re.match(r'^\d{6}$', v):
+            raise ValueError("Код должен состоять из 6 цифр")
+        return v
+    
+class UserLogin(BaseModel):
+    """Схема для входа пользователя"""
+    email: EmailStr
+    password: str
