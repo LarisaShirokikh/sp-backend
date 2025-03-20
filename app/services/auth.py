@@ -35,6 +35,10 @@ def register_new_user(db: Session, user_in):
     if existing:
         raise ValueError("Пользователь с таким email уже существует")
     
+    phone = user_crud.get_by_phone(db, phone=user_in.phone)
+    if phone:
+        raise ValueError("Пользователь с таким телефоном уже существует")
+    
     # Создаем пользователя без требования подтверждения
     user = user_crud.create(db, obj_in=user_in)
     

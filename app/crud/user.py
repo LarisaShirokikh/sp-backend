@@ -6,10 +6,11 @@ from sqlalchemy.orm import Session
 from app.core.security import get_password_hash, verify_password
 from app.crud.base import CRUDBase
 from app.models.user import User
-from app.schemas.user import UserCreate, UserUpdate
+from app.schemas.user import UserCreate, UserProfileUpdate
+from app.utils.code import generate_verification_code
 
 
-class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
+class CRUDUser(CRUDBase[User, UserCreate, UserProfileUpdate]):
     def get(self, db: Session, id: int) -> Optional[User]:
         """Получение пользователя по ID"""
         return db.query(User).filter(User.id == id).first()
@@ -22,10 +23,12 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
 
     def create(self, db: Session, *, obj_in: UserCreate) -> User:
         db_obj = User(
+            name=obj_in.name,
             email=obj_in.email,
             password=get_password_hash(obj_in.password),
             full_name=obj_in.full_name,
             phone=obj_in.phone,
+            phone_verification_code=generate_verification_code(),
             is_active=True,  # По умолчанию пользователь активен сразу
             is_verified=False,  # Email не подтвержден
             is_phone_verified=False,
@@ -36,7 +39,7 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         return db_obj
 
     def update(
-        self, db: Session, *, db_obj: User, obj_in: Union[UserUpdate, Dict[str, Any]]
+        self, db: Session, *, db_obj: User, obj_in: Union[UserProfileUpdate, Dict[str, Any]]
     ) -> User:
         if isinstance(obj_in, dict):
             update_data = obj_in

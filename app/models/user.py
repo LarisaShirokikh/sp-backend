@@ -26,7 +26,7 @@ class User(Base):
     # Дополнительные поля для организаторов
     description = Column(Text, nullable=True)
     rating = Column(Integer, default=0)
-    avatar_url = Column(String, nullable=True)
+    avatar = Column(String, nullable=True)
     
     # Для социальной сети
     followers_count = Column(Integer, default=0)

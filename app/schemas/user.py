@@ -1,5 +1,5 @@
 import re
-from pydantic import BaseModel, EmailStr, Field, field_validator, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional
 from datetime import datetime
 from app.models.user import UserRole
@@ -18,6 +18,7 @@ class UserBase(BaseSchema):
     name: str
     full_name: Optional[str] = None
     phone: Optional[str] = None
+    role: UserRole
     is_active: bool = True
     is_verified: bool = False
     is_phone_verified: bool = False
@@ -60,13 +61,13 @@ class UserCreate(BaseModel):
 
 
 # Схема для обновления пользователя
-class UserUpdate(BaseSchema):
+class UserProfileUpdate(BaseSchema):
     email: Optional[EmailStr] = None
     name: Optional[str] = None
     full_name: Optional[str] = None
     phone: Optional[str] = None
     description: Optional[str] = None
-    avatar_url: Optional[str] = None
+    avatar: Optional[str] = None
     password: Optional[str] = None
     
     @field_validator('password')
@@ -91,11 +92,9 @@ class UserResponse(UserBase):
     followers_count: int
     following_count: int
 
-
 # Схема для админ-ответа (с дополнительными полями)
 class UserAdminResponse(UserResponse):
     is_superuser: bool
-
 
 # Краткая информация о пользователе для публичных ответов
 class UserPublic(BaseSchema):

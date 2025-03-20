@@ -7,11 +7,12 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.schemas.auth import AuthResponse
 from app.schemas.token import Token
-from app.schemas.user import UserCreate
+from app.schemas.user import UserCreate, UserLogin
 from app.db.session import get_db
 from app.services.auth import (
     login_user,
     register_new_user,
+    verify_email_token_service,
     verify_phone_code_service,
     password_recovery_service,
 )
@@ -24,12 +25,29 @@ def login_access_token(
     form_data: OAuth2PasswordRequestForm = Depends()
 ) -> Any:
     result = login_user(db, username=form_data.username, password=form_data.password)
+    
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Неверный email или пароль",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    token, user = result
+    return {"access_token": token, "token_type": "bearer"}
+
+@router.post("/login/email", response_model=Token)
+def login_email(
+    *,
+    db: Session = Depends(get_db),
+    user_in: UserLogin
+):
+    """
+    Логин через email и пароль.
+    """
+    result = login_user(db, user_in.email, user_in.password)
+    if not result:
+        raise HTTPException(status_code=400, detail="Неверный email или пароль")
+    
     token, user = result
     return {"access_token": token, "token_type": "bearer"}
 
@@ -41,9 +59,9 @@ def register_user_endpoint(
 ) -> Any:
     try:
         token, user = register_new_user(db, user_in)
+        return {"access_token": token, "token_type": "bearer"}
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    return {"access_token": token, "token_type": "bearer", "user": user}
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/verify-email", status_code=status.HTTP_200_OK)
 def verify_email_endpoint(
@@ -53,7 +71,7 @@ def verify_email_endpoint(
     code: str,
 ):
     try:
-        verify_email_code_service(db, email, code)
+        verify_email_token_service(db, email, code)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"message": "Email успешно подтвержден"}
