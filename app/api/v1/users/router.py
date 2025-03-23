@@ -1,6 +1,7 @@
 import logging
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Body, Path, UploadFile, logger
 from sqlalchemy.orm import Session
+from app.core.config import settings
 from typing import Any, Optional
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
@@ -10,8 +11,9 @@ from app.services.auth import (
     verify_email_token_service, 
     verify_phone_code_service
 )
-from app.schemas.user import UserBase, UserProfileUpdate, UserProfileUpdate
-from app.services.user import cleanup_old_avatar, is_valid_file, save_avatar
+from app.schemas.user import UserBase, UserProfileUpdate, UserProfileUpdate, UserResponse
+from app.services.user import cleanup_old_avatar, cleanup_old_cover_photo, is_valid_file, save_avatar, save_cover_photo
+from app.utils.serialization import serialize_user
 
 ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp"}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
@@ -22,13 +24,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-@router.get("/me", response_model=UserBase)
-def get_user_profile(
-    current_user: User = Depends(get_current_user)
-) -> Any:
-    """
-    Получение профиля текущего пользователя.
-    """
+@router.get("/me", response_model=UserResponse)
+async def get_current_user(current_user: User = Depends(get_current_user)):
     return current_user
 
 @router.patch("/me", response_model=UserProfileUpdate)
@@ -37,14 +34,19 @@ async def update_user_profile(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     user_data: Optional[str] = Form(None),
-    avatar: Optional[UploadFile] = File(None)
+    avatar: Optional[UploadFile] = File(None),
+    cover_photo: Optional[UploadFile] = File(None),
 ) -> Any:
     """
     Частичное обновление профиля пользователя.
     """
-    if not user_data and not avatar:
+    # Проверяем наличие хотя бы одного параметра для обновления
+    if not user_data and not avatar and not cover_photo:
         raise HTTPException(status_code=400, detail="Нет данных для обновления")
+    
     update_data = {}
+    
+    # Обработка user_data
     if user_data:
         try:
             from json import loads
@@ -53,7 +55,8 @@ async def update_user_profile(
         except Exception as e:
             logger.error(f"Error parsing user data: {e}")
             raise HTTPException(status_code=400, detail="Неверный формат данных профиля")
-    # Обработка аватара, если он был отправлен
+    
+    # Обработка аватара
     if avatar:
         # Проверка размера файла
         await avatar.seek(0)  # Перемещаемся в начало файла
@@ -63,24 +66,57 @@ async def update_user_profile(
             
         # Возвращаемся в начало файла для дальнейшей обработки
         await avatar.seek(0)
-    
-
+        
         # Проверка типа файла
         if not is_valid_file(avatar.filename, avatar.content_type):
             raise HTTPException(
                 status_code=400, 
                 detail=f"Недопустимый формат файла. Разрешены: {', '.join(ALLOWED_EXTENSIONS)}"
             )
+            
         # Сохраняем новый аватар
         avatar_path = await save_avatar(current_user.id, avatar)
+        
         # Добавляем путь к аватару в данные для обновления
-        update_data["avatar"] = avatar_path
+        update_data["avatar_url"] = avatar_path
+        
         # Запланируем задачу на удаление старого аватара, если он был
-        if current_user.avatar:
-            logger.info(f"Запуск очистки старого аватара: {current_user.avatar}")
-            background_tasks.add_task(cleanup_old_avatar, current_user.avatar)
+        if current_user.avatar_url:
+            logger.info(f"Запуск очистки старого аватара: {current_user.avatar_url}")
+            background_tasks.add_task(cleanup_old_avatar, current_user.avatar_url)
         else:
             logger.info("У пользователя нет старого аватара для удаления")
+    
+    # Обработка обложки профиля
+    if cover_photo:
+        # Проверка размера файла
+        await cover_photo.seek(0)  # Перемещаемся в начало файла
+        content = await cover_photo.read(MAX_FILE_SIZE + 1)
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail=f"Файл слишком большой (макс. {MAX_FILE_SIZE // 1024 // 1024} MB)")
+            
+        # Возвращаемся в начало файла для дальнейшей обработки
+        await cover_photo.seek(0)
+        
+        # Проверка типа файла
+        if not is_valid_file(cover_photo.filename, cover_photo.content_type):
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Недопустимый формат файла. Разрешены: {', '.join(ALLOWED_EXTENSIONS)}"
+            )
+            
+        # Сохраняем новую обложку
+        cover_path = await save_cover_photo(current_user.id, cover_photo)
+        
+        # Добавляем путь к обложке в данные для обновления
+        update_data["cover_photo"] = cover_path
+        
+        # Запланируем задачу на удаление старой обложки, если она была
+        if hasattr(current_user, "cover_photo") and current_user.cover_photo:
+            logger.info(f"Запуск очистки старой обложки: {current_user.cover_photo}")
+            background_tasks.add_task(cleanup_old_cover_photo, current_user.cover_photo)
+        else:
+            logger.info("У пользователя нет старой обложки для удаления")
 
     # Выполняем обновление только если есть данные для обновления
     if update_data:
@@ -89,7 +125,7 @@ async def update_user_profile(
             
         db.commit()
         db.refresh(current_user)
-        
+        logger.info("Профиль успешно обновлен")
         return {
             "status": "success",
             "message": "Профиль успешно обновлен",
@@ -97,7 +133,7 @@ async def update_user_profile(
         }
     else:
         raise HTTPException(status_code=400, detail="Нет данных для обновления")
-
+    
 @router.post("/me/send-email-verification", response_model=Any)
 def send_email_verification_request(
     db: Session = Depends(get_db),

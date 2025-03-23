@@ -31,6 +31,10 @@ def register_new_user(db: Session, user_in):
     Returns:
         Кортеж (token, user)
     """
+    name = user_crud.get_by_name(db, name=user_in.name)
+    if name:
+        raise ValueError("Пользователь с таким именем уже существует")
+    
     existing = user_crud.get_by_email(db, email=user_in.email)
     if existing:
         raise ValueError("Пользователь с таким email уже существует")

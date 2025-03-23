@@ -1,4 +1,5 @@
 # app/db/base.py
+from app.models import *
 from sqlalchemy.ext.declarative import declared_attr, declarative_base, DeclarativeMeta
 from sqlalchemy import Column, DateTime, Integer, func
 from datetime import datetime, timezone

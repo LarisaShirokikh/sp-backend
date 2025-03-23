@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # URL для фронтенда (используется в ссылках для верификации)
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
-
+    MEDIA_URL: str = os.getenv('MEDIA_URL', 'http://localhost:8000')
     # Настройки PostgreSQL
     POSTGRES_HOST: str
     POSTGRES_PORT: int

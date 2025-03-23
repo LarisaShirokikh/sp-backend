@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.api.v1.router import router
+from app.models import *
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -17,6 +19,7 @@ app.add_middleware(
     allow_methods=["*"],  # Или конкретные методы ["GET", "POST"]
     allow_headers=["*"],  # Или конкретные заголовки
 )
+app.mount("/media", StaticFiles(directory="media"), name="media")
 
 app.include_router(router, prefix="/api")
 

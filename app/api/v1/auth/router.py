@@ -16,6 +16,7 @@ from app.services.auth import (
     verify_phone_code_service,
     password_recovery_service,
 )
+from app.utils.serialization import serialize_user
 
 router = APIRouter()
 
@@ -33,7 +34,12 @@ def login_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
     token, user = result
-    return {"access_token": token, "token_type": "bearer"}
+    return {
+    "access_token": token,
+    "token_type": "bearer",
+    "user": serialize_user(user),
+    "description": "Authentication successful"
+}
 
 @router.post("/login/email", response_model=Token)
 def login_email(
@@ -47,9 +53,16 @@ def login_email(
     result = login_user(db, user_in.email, user_in.password)
     if not result:
         raise HTTPException(status_code=400, detail="Неверный email или пароль")
-    
+
     token, user = result
-    return {"access_token": token, "token_type": "bearer"}
+
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": serialize_user(user),
+        "description": "Authentication successful"
+    }
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 def register_user_endpoint(
@@ -58,8 +71,15 @@ def register_user_endpoint(
     user_in: UserCreate,
 ) -> Any:
     try:
+        print('user_in', user_in)
         token, user = register_new_user(db, user_in)
-        return {"access_token": token, "token_type": "bearer"}
+
+        return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": serialize_user(user),
+        "description": "Authentication successful"
+    }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

@@ -18,10 +18,13 @@ class UserBase(BaseSchema):
     name: str
     full_name: Optional[str] = None
     phone: Optional[str] = None
+    description: Optional[str] = None
     role: UserRole
     is_active: bool = True
     is_verified: bool = False
     is_phone_verified: bool = False
+    avatar_url: Optional[str] = None
+    cover_photo: Optional[str] = None
 
 
 # Схема для создания пользователя
@@ -67,8 +70,9 @@ class UserProfileUpdate(BaseSchema):
     full_name: Optional[str] = None
     phone: Optional[str] = None
     description: Optional[str] = None
-    avatar: Optional[str] = None
+    avatar_url: Optional[str] = None
     password: Optional[str] = None
+    cover_photo: Optional[str] = None
     
     @field_validator('password')
     def password_complexity(cls, v):
@@ -91,6 +95,7 @@ class UserResponse(UserBase):
     is_verified: bool
     followers_count: int
     following_count: int
+    avatar_url: Optional[str] = None
 
 # Схема для админ-ответа (с дополнительными полями)
 class UserAdminResponse(UserResponse):
