@@ -71,7 +71,6 @@ def register_user_endpoint(
     user_in: UserCreate,
 ) -> Any:
     try:
-        print('user_in', user_in)
         token, user = register_new_user(db, user_in)
 
         return {

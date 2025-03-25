@@ -10,7 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
-    SECRET_KEY: str = secrets.token_urlsafe(32)
+    SECRET_KEY: str = os.getenv('SECRET_KEY') or secrets.token_urlsafe(32)
     ALGORITHM: str = "HS256"
     # 60 минут * 24 часа * 7 дней = 7 дней
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7

@@ -19,9 +19,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     def __init__(self, model: Type[ModelType]):
         """
         CRUD объект с базовыми методами для работы с моделью
-        
         **Параметры**
-        
         * `model`: модель SQLAlchemy
         """
         self.model = model

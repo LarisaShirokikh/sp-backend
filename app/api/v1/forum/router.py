@@ -46,7 +46,7 @@ def create_category(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.get("/forum/categories/{category_id}", response_model=Category)
+@router.get("/categories/{category_id}", response_model=Category)
 def get_category(category_id: int, db: Session = Depends(get_db)):
     db_category = db.query(CategoryModel).filter(CategoryModel.id == category_id).first()
     
@@ -65,8 +65,14 @@ def get_category(category_id: int, db: Session = Depends(get_db)):
     }
 
 @router.patch("/categories/{category_id}", response_model=Category)
-def update_category(category_id: str, category: CategoryUpdate, db: Session = Depends(get_db)):
+def update_category(
+    category_id: int, 
+    category: CategoryUpdate, 
+    db: Session = Depends(get_db)
+    ) -> Any:
+
     db_category = db.query(CategoryModel).filter(CategoryModel.id == category_id).first()
+
     
     if db_category is None:
         raise HTTPException(status_code=404, detail="Category not found")
@@ -101,7 +107,7 @@ def update_category(category_id: str, category: CategoryUpdate, db: Session = De
     )
 
 @router.delete("/categories/{category_id}")
-def delete_category(category_id: str, db: Session = Depends(get_db)):
+def delete_category(category_id: int, db: Session = Depends(get_db)):
     db_category = db.query(CategoryModel).filter(CategoryModel.id == category_id).first()
 
     if db_category is None:
