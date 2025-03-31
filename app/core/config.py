@@ -1,6 +1,6 @@
 import os
 from pydantic_settings import BaseSettings
-from pydantic import PostgresDsn, ValidationInfo, field_validator, EmailStr, validator
+from pydantic import Field, PostgresDsn, ValidationInfo, field_validator, EmailStr, validator
 from typing import Any, Dict, List, Optional, Union
 import secrets
 from pathlib import Path
@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str
     SQLALCHEMY_DATABASE_URI: Optional[PostgresDsn] = None
+
+    REDIS_HOST: str = Field(default="redis", env="REDIS_HOST")
+    REDIS_PORT: int = Field(default=6379, env="REDIS_PORT")
+    REDIS_DB: int = Field(default=0, env="REDIS_DB")
+    REDIS_PASSWORD: str | None = Field(default=None, env="REDIS_PASSWORD")
 
     APP_NAME: str = "Портал совместных закупок"
     PROJECT_NAME: str = "SP"

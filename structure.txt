@@ -1,0 +1,112 @@
+.
+├── .env
+├── .env.example
+├── .gitignore
+├── Dockerfile
+├── alembic
+│   ├── README
+│   ├── env.py
+│   ├── script.py.mako
+│   └── versions
+│       ├── 015c6c6aa312_fix_category_table.py
+│       ├── 048fc0dcd14f_users_table.py
+│       ├── 089e325d9bde_initial.py
+│       ├── 0f3509e444dc_fix_category_table.py
+│       ├── 154ad97320db_users_table.py
+│       ├── 220e1b027555_fix_category_table.py
+│       ├── 2c0bfc67fe4a_forum_table.py
+│       ├── 375a90422ac5_fix_category_table.py
+│       ├── 3a13e14669f3_migration.py
+│       ├── 4a3470973b96_users_table.py
+│       ├── 4b674f876d0e_users_table.py
+│       ├── 4b842d4e167b_users_table.py
+│       ├── 6e217a69fb75_fix_topic_table.py
+│       ├── 74bf0b81af5d_fix_topic_table.py
+│       ├── 880ab5b9871b_users_table.py
+│       ├── 8b18fc715879_forum_table.py
+│       ├── 98230460b3f6_users_table.py
+│       ├── 9923f45ff8c4_migration.py
+│       ├── 99940cc991dc_forum_table.py
+│       ├── 9eb7cff252d0_fix_category_table.py
+│       ├── a66097476889_users_table.py
+│       ├── ab81b974507b_fix_forum_table.py
+│       ├── b4f9afab0ec5_fix_forum_table.py
+│       ├── bfa3795d1ba4_users_table.py
+│       ├── c7400f98b97c_forum_table.py
+│       ├── cabe6ad6591e_users_table.py
+│       ├── cec1d6b35012_fix_category_table.py
+│       ├── cee1d2a76b98_migration.py
+│       ├── d19429371574_fix_category_table.py
+│       ├── d5aba234108b_migration.py
+│       ├── e1c96facfc20_fix_topic_table.py
+│       ├── eb9236ae1e2e_fix_forum_table.py
+│       └── f09e6b4ca735_fix_forum_table.py
+├── alembic.ini
+├── app
+│   ├── api
+│   │   ├── deps.py
+│   │   └── v1
+│   │       ├── auth
+│   │       │   └── router.py
+│   │       ├── forum
+│   │       │   └── router.py
+│   │       ├── router.py
+│   │       ├── topic
+│   │       │   └── router.py
+│   │       └── users
+│   │           └── router.py
+│   ├── core
+│   │   ├── config.py
+│   │   ├── exceptions.py
+│   │   └── security.py
+│   ├── crud
+│   │   ├── __init__.py
+│   │   ├── base.py
+│   │   ├── topic_forum.py
+│   │   └── user.py
+│   ├── db
+│   │   ├── __init__.py
+│   │   ├── base.py
+│   │   └── session.py
+│   ├── main.py
+│   ├── models
+│   │   ├── __init__.py
+│   │   ├── category_forum.py
+│   │   └── user.py
+│   ├── schemas
+│   │   ├── __init__.py
+│   │   ├── auth.py
+│   │   ├── base.py
+│   │   ├── category_forum.py
+│   │   ├── token.py
+│   │   └── user.py
+│   ├── services
+│   │   ├── auth.py
+│   │   ├── category_forum.py
+│   │   └── user.py
+│   ├── tasks
+│   │   ├── __init__.py
+│   │   └── celery.py
+│   └── utils
+│       ├── code.py
+│       ├── email.py
+│       ├── serialization.py
+│       └── sms.py
+├── docker-compose.yml
+├── media
+│   ├── avatars
+│   │   ├── 1_20250323151724_bc33eb53-3e27-4a06-8841-1d74d0d1dddd.jpg
+│   │   ├── 9_20250321134319_d13a6ee2-96d0-43f7-a209-701db1e10fd5.jpg
+│   │   ├── 9_20250321140602_e7fad32a-69cb-4a9d-b40e-de562341f4d4.jpg
+│   │   ├── 9_20250321144609_3746cfd5-1e99-44f4-80ec-fd08096010b6.jpg
+│   │   └── 9_20250322165016_371804e7-b997-4803-a8b3-09106db1b2b6.jpg
+│   └── covers
+│       ├── 1_20250323151749_7079e6a5-d373-4f27-90c7-d052ce6b6096.jpg
+│       ├── 9_20250322164928_410090f6-cfc0-496d-9537-44af24e030b8.jpg
+│       └── 9_20250322170927_3390ad5c-8137-4549-bc22-a88d0889dd1f.jpg
+├── poetry.lock
+├── pyproject.toml
+├── structure.txt
+└── tests
+
+22 directories, 88 files

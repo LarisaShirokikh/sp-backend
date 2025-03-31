@@ -35,6 +35,7 @@ class UserCreate(BaseModel):
     password: str
     full_name: Optional[str] = None
     phone: str
+    role: Optional[UserRole] = UserRole.user
     
     @field_validator("password")
     def password_min_length(cls, v):
@@ -90,12 +91,17 @@ class UserProfileUpdate(BaseSchema):
 # Схема для ответа при получении пользователя
 class UserResponse(UserBase):
     id: int
+    name: str
+    email: EmailStr
+    avatar_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     is_verified: bool
     followers_count: int
     following_count: int
-    avatar_url: Optional[str] = None
+
+    class Config:
+        orm_mode = True
 
 # Схема для админ-ответа (с дополнительными полями)
 class UserAdminResponse(UserResponse):

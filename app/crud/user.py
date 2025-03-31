@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import get_password_hash, verify_password
 from app.crud.base import CRUDBase
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.user import UserCreate, UserProfileUpdate
 from app.utils.code import generate_verification_code
 
@@ -35,6 +35,7 @@ class CRUDUser(CRUDBase[User, UserCreate, UserProfileUpdate]):
             is_active=True,  # По умолчанию пользователь активен сразу
             is_verified=False,  # Email не подтвержден
             is_phone_verified=False,
+            role=obj_in.role if obj_in.role else UserRole.user,
         )
         db.add(db_obj)
         db.commit()

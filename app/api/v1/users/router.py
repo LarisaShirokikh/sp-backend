@@ -1,8 +1,8 @@
 import logging
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Body, Path, UploadFile, logger
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Body, Path, Query, UploadFile, logger
 from sqlalchemy.orm import Session
 from app.core.config import settings
-from typing import Any, Optional
+from typing import Any, List, Optional
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
 from app.services.auth import (
@@ -76,10 +76,10 @@ async def update_user_profile(
             
         # Сохраняем новый аватар
         avatar_path = await save_avatar(current_user.id, avatar)
-        
+        print("✅ Сохранённый путь к аватару:", avatar_path)
         # Добавляем путь к аватару в данные для обновления
         update_data["avatar_url"] = avatar_path
-        
+        print("💾 Данные для обновления:", update_data)
         # Запланируем задачу на удаление старого аватара, если он был
         if current_user.avatar_url:
             logger.info(f"Запуск очистки старого аватара: {current_user.avatar_url}")
@@ -133,6 +133,16 @@ async def update_user_profile(
         }
     else:
         raise HTTPException(status_code=400, detail="Нет данных для обновления")
+    
+@router.get("/", response_model=List[UserResponse])
+def get_users_by_ids(
+    ids: List[int] = Query(..., description="Список ID пользователей"),
+    db: Session = Depends(get_db)
+):
+    users = db.query(User).filter(User.id.in_(ids)).all()
+    if not users:
+        raise HTTPException(status_code=404, detail="Пользователи не найдены")
+    return [serialize_user(user) for user in users]
     
 @router.post("/me/send-email-verification", response_model=Any)
 def send_email_verification_request(

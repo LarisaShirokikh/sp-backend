@@ -21,16 +21,7 @@ def login_user(db: Session, username: str, password: str):
     return token, user
 
 def register_new_user(db: Session, user_in):
-    """
-    Регистрирует нового пользователя без подтверждения email и телефона.
     
-    Args:
-        db: Сессия базы данных
-        user_in: Данные нового пользователя
-        
-    Returns:
-        Кортеж (token, user)
-    """
     name = user_crud.get_by_name(db, name=user_in.name)
     if name:
         raise ValueError("Пользователь с таким именем уже существует")
