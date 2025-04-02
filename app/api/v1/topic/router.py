@@ -15,6 +15,7 @@ from app.models.user import User
 from app.schemas.category_forum import Reply, ReplyContent, Topic, TopicCreate, TopicFile
 from app.crud.topic_forum import crud_topic
 from app.schemas.response import TopicResponse
+from app.services.activity_service import ActivityService
 
 
 logging.basicConfig(level=logging.INFO)
@@ -90,6 +91,14 @@ async def create_topic(
                     topic_id=topic.id,
                     file_paths=file_paths
                 )
+
+            # Создаем запись об активности
+            await ActivityService.create_post_activity(
+                db=db,
+                user_id=current_user.id,
+                topic_id=topic.id,
+                topic_title=topic.title
+            )
         
         logger.info(f"Topic created successfully: {topic.id} with {len(file_paths)} files")
         return topic

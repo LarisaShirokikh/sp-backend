@@ -80,6 +80,7 @@ class TopicModel(Base):
     # Добавляем связь с файлами
     files = relationship("TopicFileModel", back_populates="topic", cascade="all, delete-orphan")
     replies = relationship("ReplyModel", back_populates="topic", cascade="all, delete-orphan")
+    activities = relationship("Activity", back_populates="topic")
     
 
 # ✅ Tag
@@ -133,6 +134,8 @@ class ReplyModel(Base):
         backref="liked_replies",
         overlaps="author,forum_replies",
     )
+
+    activities = relationship("Activity", back_populates="reply")
 
 
 # Модель медиа-файла для ответа

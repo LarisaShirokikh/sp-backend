@@ -41,3 +41,4 @@ class User(Base):
     topics = relationship("TopicModel", back_populates="author")
     liked_topics = relationship("TopicModel", secondary="topic_likes", back_populates="liked_by")
     saved_topics = relationship("TopicModel", secondary="topic_saves", back_populates="saved_by")
+    activities = relationship("Activity", back_populates="user")
