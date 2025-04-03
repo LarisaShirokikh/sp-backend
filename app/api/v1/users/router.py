@@ -26,7 +26,10 @@ router = APIRouter()
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user(current_user: User = Depends(get_current_user)):
-    return current_user
+    return {
+        **current_user.__dict__,
+        "roles": [r.role for r in current_user.roles]  # ← сериализуем как список строк
+    }
 
 @router.patch("/me", response_model=UserProfileUpdate)
 async def update_user_profile(

@@ -1,5 +1,5 @@
 # app/models/user.py
-from sqlalchemy import Boolean, Column, Integer, String, Enum, Text
+from sqlalchemy import Boolean, Column, Integer, String, Text, ForeignKey
 import enum
 from sqlalchemy.orm import relationship
 from app.models import Base
@@ -18,12 +18,12 @@ class UserRole(str, enum.Enum):
 class User(Base):
     __tablename__ = "users"
 
+    id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     password = Column(String, nullable=False)
     full_name = Column(String(255), nullable=True)
     phone = Column(String(20), nullable=True)
-    role = Column(Enum(UserRole), default=UserRole.user, nullable=False)
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
     description = Column(Text, nullable=True)
@@ -37,8 +37,18 @@ class User(Base):
     phone_verification_code = Column(String, nullable=True)
     is_phone_verified = Column(Boolean, default=False)
 
-    # ✅ связи
+    # связи
+    roles = relationship("UserRoleAssociation", back_populates="user", cascade="all, delete-orphan")
     topics = relationship("TopicModel", back_populates="author")
     liked_topics = relationship("TopicModel", secondary="topic_likes", back_populates="liked_by")
     saved_topics = relationship("TopicModel", secondary="topic_saves", back_populates="saved_by")
     activities = relationship("Activity", back_populates="user")
+    organized_group_buys = relationship("GroupBuy", back_populates="organizer")
+    orders = relationship("Order", back_populates="user")
+
+class UserRoleAssociation(Base):
+    __tablename__ = "user_roles"
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    role = Column(String, primary_key=True)
+
+    user = relationship("User", back_populates="roles")

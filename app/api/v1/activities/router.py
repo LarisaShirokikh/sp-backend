@@ -1,46 +1,33 @@
 import logging
+from aiohttp import request
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, text
 from sqlalchemy.orm import selectinload
-from typing import List, Optional
+from typing import List
 from datetime import datetime
 
-from app.db.session import get_db
-from app.models.activity import Activity
+from app.api.deps import get_db
+from app.models.activity import Activity, ActivityType
 from app.models.user import User
-from app.models.category_forum import TopicModel, ReplyModel
 from app.api.deps import get_current_user
-from app.schemas.activity import ActivityCreate, ActivityOut, ActivityType
-from app.services.activity_service import ActivityService
+from app.schemas.activity import ActivityCreate, ActivityOut
 
-# Настройка логирования
-logging.basicConfig(level=logging.DEBUG)  # Повышаем уровень логирования для отладки
 logger = logging.getLogger(__name__)
-
 router = APIRouter()
 
-# Тестовый эндпоинт для проверки соединения с БД
 @router.get("/test-db", status_code=status.HTTP_200_OK)
 async def test_database_connection(db: AsyncSession = Depends(get_db)):
-    """
-    Проверка соединения с базой данных.
-    """
+    """Проверка соединения с базой данных."""
     try:
-        # Простой SQL-запрос для проверки
-        result = await db.execute(text("SELECT 1 as test"))
+        # Синхронный вызов execute без await
+        result = db.execute(text("SELECT 1 as test"))
         value = result.scalar()
         
-        # Проверяем существование таблицы activity
-        tables_result = await db.execute(text(
-            "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'activity')"
-        ))
-        table_exists = tables_result.scalar()
-        
         return {
-            "database_connection": "OK",
-            "test_query_result": value,
-            "activity_table_exists": table_exists
+            "status": "success",
+            "test_value": value,
+            "message": "Соединение с базой данных работает"
         }
     except Exception as e:
         logger.error(f"Database connection test failed: {str(e)}")
@@ -49,29 +36,18 @@ async def test_database_connection(db: AsyncSession = Depends(get_db)):
             detail=f"Ошибка соединения с базой данных: {str(e)}"
         )
 
-# Получение списка последних активностей
 @router.get("", response_model=List[ActivityOut])
 async def get_activities(
     limit: int = Query(5, ge=1, le=50),
     skip: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Получить список последних активностей пользователей.
-    
-    - **limit**: Максимальное количество записей (по умолчанию 5, макс. 50)
-    - **skip**: Сколько записей пропустить (для пагинации)
-    """
+    """Получить список последних активностей пользователей."""
     try:
-        logger.debug(f"Getting activities: limit={limit}, skip={skip}")
-        
-        # Запрос к БД для получения активностей с присоединением таблицы пользователей
         query = (
             select(Activity)
             .options(
-                # Загружаем связанного пользователя
                 selectinload(Activity.user),
-                # Загружаем связанные сущности в зависимости от типа активности
                 selectinload(Activity.topic),
                 selectinload(Activity.reply)
             )
@@ -80,36 +56,27 @@ async def get_activities(
             .limit(limit)
         )
         
-        # ВАЖНО: Используем await для db.execute
-        result = await db.execute(query)
+        # Синхронный вызов execute без await
+        result = db.execute(query)
         activities = result.scalars().all()
-        
-        logger.debug(f"Found {len(activities)} activities")
-        
-        # Преобразуем данные для фронтенда
-        activity_list = []
+
+        response = []
         for activity in activities:
-            # Определяем содержимое и ссылку в зависимости от типа активности
             content = ""
             link = "#"
             entity_id = None
-            
-            if activity.type == ActivityType.POST:
-                # Активность связана с созданием темы
-                if activity.topic:
-                    content = activity.topic.title
-                    link = f"/forum/topic/{activity.topic.id}"
-                    entity_id = activity.topic.id
-                    
-            elif activity.type == ActivityType.REPLY:
-                # Активность связана с ответом на тему
-                if activity.reply and activity.topic:
-                    content = activity.topic.title
-                    link = f"/forum/topic/{activity.topic.id}#reply-{activity.reply.id}"
-                    entity_id = activity.topic.id
-                    
+
+            if activity.type == ActivityType.POST and activity.topic:
+                content = activity.topic.title
+                link = f"/forum/topic/{activity.topic.id}"
+                entity_id = activity.topic.id
+
+            elif activity.type == ActivityType.REPLY and activity.reply and activity.topic:
+                content = activity.topic.title
+                link = f"/forum/topic/{activity.topic.id}#reply-{activity.reply.id}"
+                entity_id = activity.topic.id
+
             elif activity.type == ActivityType.LIKE:
-                # Активность связана с лайком
                 if activity.topic:
                     content = activity.topic.title
                     link = f"/forum/topic/{activity.topic.id}"
@@ -119,8 +86,8 @@ async def get_activities(
                     topic_id = activity.reply.topic_id
                     link = f"/forum/topic/{topic_id}#reply-{activity.reply.id}"
                     entity_id = topic_id
-                    
-            activity_list.append({
+
+            response.append({
                 "id": activity.id,
                 "type": activity.type,
                 "user": {
@@ -133,30 +100,27 @@ async def get_activities(
                 "link": link,
                 "entity_id": entity_id
             })
-        
-        return activity_list
+
+        return response
     except Exception as e:
-        logger.error(f"Error in get_activities: {str(e)}")
+        logger.exception(f"Ошибка при получении активностей: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ошибка при получении активностей: {str(e)}"
+            detail="Ошибка при получении активностей"
         )
 
-# Создание записи об активности (для внутреннего использования)
 @router.post("", response_model=ActivityOut, status_code=status.HTTP_201_CREATED)
 async def create_activity(
     activity_data: ActivityCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Создать новую запись об активности пользователя.
-    Обычно вызывается автоматически при действиях пользователя.
-    """
+    """Создать новую запись об активности пользователя."""
     try:
-        logger.info(f"Creating activity: type={activity_data.type}, user_id={current_user.id}")
+        logger.info(f"Activity request received. Headers: {request.headers}")
+        logger.info(f"Activity data: {activity_data}")
+        logger.info(f"Current user: {current_user.id}, {current_user.name}")
         
-        # Прямое создание активности для отладки
         activity = Activity(
             user_id=current_user.id,
             type=activity_data.type,
@@ -164,20 +128,21 @@ async def create_activity(
             reply_id=activity_data.reply_id,
             created_at=datetime.utcnow()
         )
-        
+
         logger.debug(f"Activity object created with fields: {vars(activity)}")
         
         db.add(activity)
         logger.debug("Activity added to session, committing...")
         
-        await db.commit()
+        # ВАЖНО: Используем sync методы без await
+        db.commit()
         logger.debug("Commit successful")
         
-        await db.refresh(activity)
+        # ВАЖНО: Используем sync методы без await
+        db.refresh(activity)
         logger.info(f"Activity created with ID: {activity.id}")
-        
-        # Подготавливаем данные для ответа
-        response = {
+
+        return {
             "id": activity.id,
             "type": activity.type,
             "user": {
@@ -190,15 +155,15 @@ async def create_activity(
             "entity_id": activity_data.topic_id,
             "content": activity_data.content or ""
         }
-        
-        return response
     except Exception as e:
-        logger.error(f"Error in create_activity: {str(e)}")
-        await db.rollback()
+        logger.exception(f"Ошибка при создании активности: {str(e)}")
         
-        # Пробуем создать активность напрямую через SQL
+        # ВАЖНО: Используем sync методы без await
+        db.rollback()
+        
+        # Пробуем создать через прямой SQL
         try:
-            logger.info("Attempting direct SQL insert as fallback...")
+            logger.info("Trying direct SQL insert as fallback...")
             
             sql = text("""
                 INSERT INTO activity (user_id, type, topic_id, reply_id, created_at)
@@ -206,11 +171,12 @@ async def create_activity(
                 RETURNING id
             """)
             
-            result = await db.execute(
+            # Синхронный вызов execute без await
+            result = db.execute(
                 sql,
                 {
                     "user_id": current_user.id,
-                    "type": activity_data.type.value,
+                    "type": activity_data.type.value, 
                     "topic_id": activity_data.topic_id,
                     "reply_id": activity_data.reply_id,
                     "created_at": datetime.utcnow()
@@ -218,12 +184,12 @@ async def create_activity(
             )
             
             activity_id = result.scalar()
-            await db.commit()
+            # ВАЖНО: Используем sync методы без await
+            db.commit()
             
             logger.info(f"Activity created via SQL with ID: {activity_id}")
             
-            # Подготавливаем данные для ответа после SQL создания
-            response = {
+            return {
                 "id": activity_id,
                 "type": activity_data.type,
                 "user": {
@@ -236,67 +202,51 @@ async def create_activity(
                 "entity_id": activity_data.topic_id,
                 "content": activity_data.content or ""
             }
-            
-            return response
         except Exception as sql_error:
             logger.error(f"SQL fallback also failed: {str(sql_error)}")
-            await db.rollback()
+            # ВАЖНО: Используем sync методы без await
+            db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Ошибка при создании активности: {str(sql_error)}"
+                detail="Ошибка при создании активности"
             )
-        
-    except Exception as e:
-        logger.error(f"Error in create_activity: {str(e)}")
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ошибка при создании активности: {str(e)}"
-        )
 
-# Удаление активности (опционально, для модераторов)
 @router.delete("/{activity_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_activity(
     activity_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Удалить запись об активности.
-    Доступно только администраторам и модераторам.
-    """
+    """Удалить запись об активности. Только для модераторов и админов."""
+    if not current_user.is_superuser and current_user.role != "moderator":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недостаточно прав для выполнения операции"
+        )
+
     try:
-        # Проверяем права доступа
-        if not current_user.is_superuser and current_user.role != "moderator":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Недостаточно прав для выполнения операции"
-            )
-        
-        # Находим активность по ID
-        query = select(Activity).where(Activity.id == activity_id)
-        # ВАЖНО: Используем await для db.execute
-        result = await db.execute(query)
+        # Синхронный вызов execute без await
+        result = db.execute(select(Activity).where(Activity.id == activity_id))
         activity = result.scalar_one_or_none()
-        
+
         if not activity:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Активность не найдена"
             )
-        
-        # Удаляем активность
+
         db.delete(activity)
-        await db.commit()
+        # ВАЖНО: Используем sync методы без await
+        db.commit()
         
         return None
     except HTTPException:
-        # Пробрасываем HTTP-исключения как есть
         raise
     except Exception as e:
-        await db.rollback()
-        logger.error(f"Error in delete_activity: {str(e)}")
+        logger.exception(f"Ошибка при удалении активности: {str(e)}")
+        # ВАЖНО: Используем sync методы без await
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ошибка при удалении активности: {str(e)}"
+            detail="Ошибка при удалении активности"
         )

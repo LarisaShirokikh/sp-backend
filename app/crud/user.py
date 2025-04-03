@@ -85,7 +85,7 @@ class CRUDUser(CRUDBase[User, UserCreate, UserProfileUpdate]):
         return user.role == "admin"
     
     def is_organizer(self, user: User) -> bool:
-        return user.role == "organizer" or user.role == "admin"
+        return any(role.role in ["organizer", "admin"] for role in user.roles)
     
     # Получить общее количество пользователей
     def get_count(self, db: Session) -> int:

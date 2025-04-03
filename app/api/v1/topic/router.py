@@ -4,7 +4,7 @@ import shutil
 from typing import Any, List, Optional
 from sqlalchemy import insert, select, delete
 from sqlalchemy.orm import Session
-from fastapi import APIRouter, Body, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 
 from app.api.deps import get_current_user
@@ -34,15 +34,17 @@ async def create_topic(
     category_id: int = Form(...),
     files: List[UploadFile] = File(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    request: Request = None,
 ):
     """
     Создание нового топика на форуме с поддержкой загрузки файлов
     """
     try:
         # Подробное логирование входящих данных
-        logger.info(f"Creating topic for user {current_user.id}")
-        logger.info(f"Topic data: title={title}, category_id={category_id}, files_count={len(files) if files else 0}")
+        if request:
+            logger.info(f"Заголовки запроса: {request.headers}")
+            logger.info(f"IP клиента: {request.client.host}")
 
         # Проверка прав пользователя
         if not current_user.is_active:
@@ -64,6 +66,19 @@ async def create_topic(
             author_id=current_user.id
         )
         
+        # Важно: добавляем await для асинхронного вызова
+        try:
+            ActivityService.create_post_activity(
+                db=db,
+                user_id=current_user.id,
+                topic_id=topic.id,
+                topic_title=topic.title
+            )
+            logger.info(f"Activity for topic {topic.id} created successfully")
+        except Exception as activity_error:
+            # Логируем ошибку, но продолжаем выполнение
+            logger.error(f"Failed to create activity: {str(activity_error)}")
+        
         # Обработка загруженных файлов
         file_paths = []
         if files:
@@ -74,8 +89,6 @@ async def create_topic(
             for file in files:
                 if file.filename:
                     # Генерируем безопасное имя файла
-                    # В реальном приложении стоит использовать UUID или другой метод
-                    # для обеспечения уникальности имен файлов
                     file_path = os.path.join(topic_upload_dir, file.filename)
                     
                     # Сохраняем файл
@@ -91,16 +104,9 @@ async def create_topic(
                     topic_id=topic.id,
                     file_paths=file_paths
                 )
-
-            # Создаем запись об активности
-            await ActivityService.create_post_activity(
-                db=db,
-                user_id=current_user.id,
-                topic_id=topic.id,
-                topic_title=topic.title
-            )
         
         logger.info(f"Topic created successfully: {topic.id} with {len(file_paths)} files")
+        
         return topic
     
     except ValueError as e:
@@ -109,7 +115,7 @@ async def create_topic(
     except Exception as e:
         logger.error(f"Unexpected error creating topic: {e}")
         raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
-     
+      
 @router.get("/category/{category_id}", response_model=List[Topic])
 def read_topics_by_category(
     category_id: int,
@@ -208,6 +214,18 @@ async def create_reply(
             content=content_data.content,
             author_id=current_user.id
         )
+         # Важно: добавляем await для асинхронного вызова
+        try:
+            ActivityService.create_post_activity(
+                db=db,
+                user_id=current_user.id,
+                topic_id=topic.id,
+                topic_title=content_data.content
+            )
+            logger.info(f"Activity for topic {topic.id} created successfully")
+        except Exception as activity_error:
+            # Логируем ошибку, но продолжаем выполнение
+            logger.error(f"Failed to create activity: {str(activity_error)}")
         
         logger.info(f"Reply created successfully: {reply.id}")
         return reply
@@ -330,7 +348,14 @@ def like_reply(
             user_id=current_user.id
         )
         
-        return {"success": True, "message": result}
+        
+        # Создаем активность
+        ActivityService.create_like_activity(
+            db=db,
+            user_id=current_user.id,
+            reply_id=reply_id,
+        )
+        
     
     except Exception as e:
         logger.error(f"Error liking reply: {e}")
@@ -450,6 +475,20 @@ def add_like(
         topic.dislike_count -= 1
     
     db.commit()
+
+    # Создаем запись об активности после успешного добавления лайка
+    try:
+        ActivityService.create_like_activity(
+            db=db,
+            user_id=current_user.id,
+            topic_id=topic_id
+        )
+        
+    except Exception as e:
+        # Логгируем ошибку, но не прерываем выполнение основного процесса
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Ошибка при создании активности лайка: {str(e)}")
     return {"success": True}
 
 # Удаление лайка

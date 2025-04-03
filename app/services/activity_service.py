@@ -9,7 +9,7 @@ import traceback
 from app.models.activity import Activity
 from app.schemas.activity import ActivityType
 
-# Настройка логирования с высоким уровнем детализации
+# Настройка логирования
 logger = logging.getLogger(__name__)
 
 class ActivityService:
@@ -33,8 +33,9 @@ class ActivityService:
         try:
             # Проверяем соединение с базой данных
             try:
-                result = await db.execute(text("SELECT 1"))
-                logger.info("Database connection test: SUCCESS")
+                # Синхронный вызов без await
+                result = db.execute(text("SELECT 1"))
+                logger.info(f"Database connection test: SUCCESS {result.scalar()}")
             except Exception as e:
                 logger.error(f"Database connection test: FAILED - {str(e)}")
                 raise
@@ -47,7 +48,6 @@ class ActivityService:
                 created_at=datetime.utcnow()
             )
             
-            # Логируем все поля объекта для проверки
             logger.info(f"Activity object created with fields: {vars(activity)}")
             
             # Добавляем в сессию
@@ -55,34 +55,16 @@ class ActivityService:
             db.add(activity)
             logger.info("Activity added to session. Calling commit...")
             
-            # Пробуем прямой SQL-запрос вместо ORM (для отладки)
-            # Раскомментируйте, если ORM метод не работает
-            """
-            raw_sql = text(
-                "INSERT INTO activity (user_id, type, topic_id, created_at) "
-                "VALUES (:user_id, :type, :topic_id, :created_at)"
-            )
-            await db.execute(
-                raw_sql, 
-                {
-                    "user_id": user_id, 
-                    "type": ActivityType.POST.value,  # Используем .value для enum
-                    "topic_id": topic_id, 
-                    "created_at": datetime.utcnow()
-                }
-            )
-            """
-            
-            # Фиксируем транзакцию
+            # Фиксируем транзакцию с await
             try:
                 await db.commit()
                 logger.info("Commit successful")
             except Exception as e:
                 logger.error(f"Commit failed: {str(e)}")
-                logger.error(traceback.format_exc())  # Полный стектрейс
+                logger.error(traceback.format_exc())
                 raise
             
-            # Обновляем объект из БД
+            # Обновляем объект из БД с await
             try:
                 await db.refresh(activity)
                 logger.info(f"Activity refreshed from DB, id={activity.id}")
@@ -93,7 +75,8 @@ class ActivityService:
             # Проверяем, что активность действительно сохранилась
             try:
                 check_query = select(Activity).where(Activity.id == activity.id)
-                check_result = await db.execute(check_query)
+                # Синхронный вызов без await
+                check_result = db.execute(check_query)
                 saved_activity = check_result.scalar_one_or_none()
                 
                 if saved_activity:
@@ -106,7 +89,7 @@ class ActivityService:
             return activity
         except Exception as e:
             logger.error(f"Error creating POST activity: {str(e)}")
-            logger.error(traceback.format_exc())  # Полный стектрейс для отладки
+            logger.error(traceback.format_exc())
             try:
                 await db.rollback()
                 logger.info("Transaction rolled back")
@@ -234,7 +217,8 @@ class ActivityService:
                 .limit(limit)
             )
             
-            result = await db.execute(query)
+            # Синхронный вызов без await
+            result = db.execute(query)
             activities = result.scalars().all()
             
             logger.info(f"Retrieved {len(activities)} activities")

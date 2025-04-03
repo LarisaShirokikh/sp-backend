@@ -314,7 +314,7 @@ class CRUDTopic(CRUDBase[TopicModel, TopicCreate, TopicUpdate]):
         # Обновляем объекты
         for file in added_files:
             db.refresh(file)
-        
+        print(f"Добавляем файлы к ответу {reply_id}: {file_paths}")
         return added_files
 
     def get_reply_files(self, db: Session, reply_id: int):
