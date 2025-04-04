@@ -1,6 +1,7 @@
 # app/api/v1/group_buy/router.py
 
-from itertools import product
+# Change this import
+from itertools import product as itertools_product
 import json
 import logging
 from typing import List, Optional
@@ -8,6 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.db.redis import get_redis_client
 from app.crud.group_buy import group_buy
+# Add import for product CRUD operations
+from app.crud.group_buy import product
 
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from app.api.deps import get_current_user, get_db, get_current_organizer
@@ -45,6 +48,12 @@ async def create_group_buy(
         "description": new_group_buy.description,
         "category": new_group_buy.category,
         "status": new_group_buy.status,
+        "fee_percent": new_group_buy.fee_percent,
+        "delivery_time": new_group_buy.delivery_time,
+        "delivery_location": new_group_buy.delivery_location,
+        "transportation_cost": new_group_buy.transportation_cost,
+        "participation_terms": new_group_buy.participation_terms,
+        "image_url": new_group_buy.image_url,
         "organizer_id": new_group_buy.organizer_id,
         "created_at": new_group_buy.created_at.isoformat(),
         "updated_at": new_group_buy.updated_at.isoformat(),
@@ -229,19 +238,19 @@ async def update_group_buy(
     # Update Redis cache
     redis = await get_redis_client()
     group_buy_key = f"group_buy:{updated_group_buy.id}"
-    redis.delete(group_buy_key)  # Delete old cache
+    await redis.delete(group_buy_key)  # Delete old cache
     
     # Update active_group_buys set
-    if updated_group_buy.is_visible and updated_group_buy.status == group_buy.GroupBuyStatus.active:
-        redis.sadd("active_group_buys", updated_group_buy.id)
+    if updated_group_buy.is_visible and updated_group_buy.status == GroupBuyStatus.active:
+        await redis.sadd("active_group_buys", updated_group_buy.id)
     else:
-        redis.srem("active_group_buys", updated_group_buy.id)
+        await redis.srem("active_group_buys", updated_group_buy.id)
     
     return updated_group_buy
 
 
 @router.delete("/{group_buy_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_group_buy(
+async def delete_group_buy(
     *,
     db: Session = Depends(get_db),
     group_buy_id: int = Path(..., title="The ID of the group buy to delete"),
@@ -259,7 +268,7 @@ def delete_group_buy(
         )
     
     # Check permissions
-    is_admin = current_user.role in ["admin", "super_admin"]
+    is_admin = any(r.role in ["admin", "super_admin"] for r in current_user.roles)
     is_organizer = db_group_buy.organizer_id == current_user.id
     
     if not (is_admin or is_organizer):
@@ -272,17 +281,17 @@ def delete_group_buy(
     group_buy.delete(db=db, id=group_buy_id)
     
     # Delete from Redis
-    redis = get_redis_client()
-    redis.delete(f"group_buy:{group_buy_id}")
-    redis.srem("active_group_buys", group_buy_id)
-    redis.srem(f"user:{db_group_buy.organizer_id}:group_buys", group_buy_id)
+    redis = await get_redis_client()
+    await redis.delete(f"group_buy:{group_buy_id}")
+    await redis.srem("active_group_buys", group_buy_id)
+    await redis.srem(f"user:{db_group_buy.organizer_id}:group_buys", group_buy_id)
     
     # Delete associated products from Redis
-    product_ids = redis.smembers(f"group_buy:{group_buy_id}:products")
+    product_ids = await redis.smembers(f"group_buy:{group_buy_id}:products")
     for product_id in product_ids:
-        redis.delete(f"product:{product_id}")
+        await redis.delete(f"product:{product_id}")
     
-    redis.delete(f"group_buy:{group_buy_id}:products")
+    await redis.delete(f"group_buy:{group_buy_id}:products")
     
     return None
 
@@ -290,7 +299,7 @@ def delete_group_buy(
 # ========== Product Routes ==========
 
 @router.post("/{group_buy_id}/products", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
-def create_product(
+async def create_product(
     *,
     db: Session = Depends(get_db),
     group_buy_id: int = Path(..., title="The ID of the group buy"),
@@ -309,7 +318,7 @@ def create_product(
         )
     
     # Check permissions
-    is_admin = current_user.role in ["admin", "super_admin"]
+    is_admin = any(r.role in ["admin", "super_admin"] for r in current_user.roles)
     is_organizer = db_group_buy.organizer_id == current_user.id
     
     if not (is_admin or is_organizer):
@@ -318,23 +327,29 @@ def create_product(
             detail="You don't have permission to add products to this group buy"
         )
     
-    # Create product
+    # Create product - using the imported product module, not itertools.product
     new_product = product.create(db=db, obj_in=product_in, group_buy_id=group_buy_id)
     
+    # Calculate price with fee for caching
+    fee_percent = db_group_buy.fee_percent
+    price_with_fee = round(new_product.price * (1 + fee_percent / 100), 2)
+    
     # Cache in Redis
-    redis = get_redis_client()
+    redis = await get_redis_client()
     product_key = f"product:{new_product.id}"
     product_data = {
         "id": new_product.id,
         "name": new_product.name,
         "price": new_product.price,
+        "price_with_fee": price_with_fee,
+        "fee_percent": fee_percent,
         "group_buy_id": new_product.group_buy_id,
         "created_at": new_product.created_at.isoformat(),
     }
-    redis.set(product_key, json.dumps(product_data), ex=3600)  # 1 hour cache
+    await redis.set(product_key, json.dumps(product_data), ex=3600)  # 1 hour cache
     
     # Add to group buy's products set
-    redis.sadd(f"group_buy:{group_buy_id}:products", new_product.id)
+    await redis.sadd(f"group_buy:{group_buy_id}:products", new_product.id)
     
     return new_product
 
@@ -361,7 +376,7 @@ def get_products(
     
     # Check permissions for non-visible group buys
     if not db_group_buy.is_visible:
-        is_admin = current_user.role in ["admin", "super_admin"]
+        is_admin = any(r.role in ["admin", "super_admin"] for r in current_user.roles)
         is_organizer = db_group_buy.organizer_id == current_user.id
         
         if not (is_admin or is_organizer):
@@ -370,7 +385,14 @@ def get_products(
                 detail="You don't have permission to view products in this group buy"
             )
     
-    return product.get_multi(db=db, group_buy_id=group_buy_id, skip=skip, limit=limit)
+    products = product.get_multi(db=db, group_buy_id=group_buy_id, skip=skip, limit=limit)
+    
+    # Add price_with_fee to each product if not already calculated
+    for p in products:
+        if not hasattr(p, 'price_with_fee') or p.price_with_fee is None:
+            p.price_with_fee = round(p.price * (1 + db_group_buy.fee_percent / 100), 2)
+    
+    return products
 
 
 @router.get("/{group_buy_id}/products/{product_id}", response_model=ProductResponse)
@@ -394,7 +416,7 @@ def get_product(
     
     # Check permissions for non-visible group buys
     if not db_group_buy.is_visible:
-        is_admin = current_user.role in ["admin", "super_admin"]
+        is_admin = any(r.role in ["admin", "super_admin"] for r in current_user.roles)
         is_organizer = db_group_buy.organizer_id == current_user.id
         
         if not (is_admin or is_organizer):
@@ -411,11 +433,15 @@ def get_product(
             detail="Product not found in this group buy"
         )
     
+    # Calculate price with fee if not already calculated
+    if not hasattr(db_product, 'price_with_fee') or db_product.price_with_fee is None:
+        db_product.price_with_fee = round(db_product.price * (1 + db_group_buy.fee_percent / 100), 2)
+    
     return db_product
 
 
 @router.put("/{group_buy_id}/products/{product_id}", response_model=ProductResponse)
-def update_product(
+async def update_product(
     *,
     db: Session = Depends(get_db),
     group_buy_id: int = Path(..., title="The ID of the group buy"),
@@ -435,7 +461,7 @@ def update_product(
         )
     
     # Check permissions
-    is_admin = current_user.role in ["admin", "super_admin"]
+    is_admin = any(r.role in ["admin", "super_admin"] for r in current_user.roles)
     is_organizer = db_group_buy.organizer_id == current_user.id
     
     if not (is_admin or is_organizer):
@@ -455,15 +481,18 @@ def update_product(
     # Update product
     updated_product = product.update(db=db, db_obj=db_product, obj_in=product_in)
     
+    # Calculate price with fee
+    updated_product.price_with_fee = round(updated_product.price * (1 + db_group_buy.fee_percent / 100), 2)
+    
     # Update Redis cache
-    redis = get_redis_client()
-    redis.delete(f"product:{product_id}")
+    redis = await get_redis_client()
+    await redis.delete(f"product:{product_id}")
     
     return updated_product
 
 
 @router.delete("/{group_buy_id}/products/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_product(
+async def delete_product(
     *,
     db: Session = Depends(get_db),
     group_buy_id: int = Path(..., title="The ID of the group buy"),
@@ -482,7 +511,7 @@ def delete_product(
         )
     
     # Check permissions
-    is_admin = current_user.role in ["admin", "super_admin"]
+    is_admin = any(r.role in ["admin", "super_admin"] for r in current_user.roles)
     is_organizer = db_group_buy.organizer_id == current_user.id
     
     if not (is_admin or is_organizer):
@@ -501,3 +530,10 @@ def delete_product(
     
     # Delete product
     product.delete(db=db, id=product_id)
+    
+    # Delete from Redis
+    redis = await get_redis_client()
+    await redis.delete(f"product:{product_id}")
+    await redis.srem(f"group_buy:{group_buy_id}:products", product_id)
+    
+    return None

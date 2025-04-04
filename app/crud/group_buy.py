@@ -1,207 +1,94 @@
 # app/crud/group_buy.py
-from typing import List, Optional, Dict, Any, Union
-from sqlalchemy.orm import Session
-from sqlalchemy import func
-from fastapi.encoders import jsonable_encoder
-from datetime import datetime
 
-from app.models.group_buy import GroupBuy, Product, Order, OrderItem
-from app.models.group_buy import GroupBuyStatus
+from typing import Any, Dict, Optional, List, Union
+from sqlalchemy.orm import Session
+from sqlalchemy import func, and_, or_
+from fastapi.encoders import jsonable_encoder
+
+from app.models.group_buy import GroupBuy, Product, Order, GroupBuyStatus
 from app.schemas.group_buy import GroupBuyCreate, GroupBuyUpdate, ProductCreate, ProductUpdate
 
 
+# ========== GroupBuy CRUD ==========
+
 class GroupBuyCRUD:
-    """CRUD operations for GroupBuy"""
-    
-    def create(self, db: Session, *, obj_in: GroupBuyCreate, organizer_id: int) -> GroupBuy:
-        """Create a new group buy"""
-        obj_in_data = jsonable_encoder(obj_in)
-        db_obj = GroupBuy(
-            **obj_in_data,
-            organizer_id=organizer_id,
-            status=GroupBuyStatus.active if obj_in.is_visible else GroupBuyStatus.draft
-        )
-        db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
-        
-        # Cache in Redis
-        self._cache_group_buy(db_obj)
-        
-        return db_obj
-    
     def get(self, db: Session, id: int) -> Optional[GroupBuy]:
-        """Get a group buy by ID"""
         return db.query(GroupBuy).filter(GroupBuy.id == id).first()
     
     def get_multi(
-        self, db: Session, *, skip: int = 0, limit: int = 100, 
+        self, 
+        db: Session, 
+        *, 
+        skip: int = 0, 
+        limit: int = 100,
         filters: Optional[Dict[str, Any]] = None
     ) -> List[GroupBuy]:
-        """Get multiple group buys with optional filters"""
+        filters = filters or {}
         query = db.query(GroupBuy)
         
-        if filters:
-            if filters.get("organizer_id"):
-                query = query.filter(GroupBuy.organizer_id == filters["organizer_id"])
-            
-            if filters.get("status"):
-                query = query.filter(GroupBuy.status == filters["status"])
-            
-            if filters.get("category"):
-                query = query.filter(GroupBuy.category == filters["category"])
-            
-            if filters.get("is_visible") is not None:
-                query = query.filter(GroupBuy.is_visible == filters["is_visible"])
-            
-            if filters.get("active_only"):
-                query = query.filter(
-                    GroupBuy.status == GroupBuyStatus.active,
-                    GroupBuy.is_visible == True,
-                    GroupBuy.end_date > datetime.now(datetime.timezone.utc)
-                )
+        # Apply filters
+        if filters.get("category"):
+            query = query.filter(GroupBuy.category == filters["category"])
         
-        return query.order_by(GroupBuy.created_at.desc()).offset(skip).limit(limit).all()
+        if filters.get("status"):
+            query = query.filter(GroupBuy.status == filters["status"])
+        
+        if filters.get("organizer_id"):
+            query = query.filter(GroupBuy.organizer_id == filters["organizer_id"])
+        
+        if filters.get("is_visible") is not None:
+            query = query.filter(GroupBuy.is_visible == filters["is_visible"])
+        
+        if filters.get("active_only"):
+            query = query.filter(GroupBuy.status == GroupBuyStatus.active)
+        
+        return query.offset(skip).limit(limit).all()
     
-    def update(
-        self, db: Session, *, db_obj: GroupBuy, obj_in: Union[GroupBuyUpdate, Dict[str, Any]]
-    ) -> GroupBuy:
-        """Update a group buy"""
-        obj_data = jsonable_encoder(db_obj)
-        
-        if isinstance(obj_in, dict):
-            update_data = obj_in
-        else:
-            update_data = obj_in.dict(exclude_unset=True)
-        
-        for field in obj_data:
-            if field in update_data:
-                setattr(db_obj, field, update_data[field])
-        
-        db_obj.updated_at = datetime.now(datetime.timezone.utc)
-        db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
-        
-        # Update cache in Redis
-        self._cache_group_buy(db_obj)
-        
-        return db_obj
-    
-    def delete(self, db: Session, *, id: int) -> bool:
-        """Delete a group buy"""
-        obj = db.query(GroupBuy).get(id)
-        if not obj:
-            return False
-        
-        # Delete from Redis cache
-        self._remove_from_cache(obj.id)
-        
-        db.delete(obj)
-        db.commit()
-        return True
-    
-    def get_by_organizer(
-        self, db: Session, *, organizer_id: int, skip: int = 0, limit: int = 100
-    ) -> List[GroupBuy]:
-        """Get group buys by organizer ID"""
-        return (
-            db.query(GroupBuy)
-            .filter(GroupBuy.organizer_id == organizer_id)
-            .order_by(GroupBuy.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-    
-    def get_active(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[GroupBuy]:
-        """Get active and visible group buys"""
-        return (
-            db.query(GroupBuy)
-            .filter(
-                GroupBuy.status == GroupBuyStatus.active,
-                GroupBuy.is_visible == True,
-                GroupBuy.end_date > datetime.utcnow()
-            )
-            .order_by(GroupBuy.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-    
-    def get_with_products_count(self, db: Session, id: int) -> Optional[Dict[str, Any]]:
-        """Get a group buy with products count"""
-        result = (
-            db.query(
-                GroupBuy,
-                func.count(Product.id).label("products_count")
-            )
-            .outerjoin(Product, GroupBuy.id == Product.group_buy_id)
-            .filter(GroupBuy.id == id)
-            .group_by(GroupBuy.id)
-            .first()
-        )
+    def get_with_products_count(self, db: Session, id: int) -> Optional[Dict]:
+        # Get group buy with joined product count
+        result = db.query(
+            GroupBuy,
+            func.count(Product.id).label("products_count")
+        ).outerjoin(
+            Product, Product.group_buy_id == GroupBuy.id
+        ).filter(
+            GroupBuy.id == id
+        ).group_by(
+            GroupBuy.id
+        ).first()
         
         if not result:
             return None
         
-        group_buy, products_count = result
-        group_buy_data = jsonable_encoder(group_buy)
+        # Unpack result
+        db_group_buy, products_count = result
+        
+        # Convert to dict and add products count
+        group_buy_data = jsonable_encoder(db_group_buy)
         group_buy_data["products_count"] = products_count
         
         return group_buy_data
     
-    def _cache_group_buy(self, group_buy: GroupBuy) -> None:
-        """Cache group buy in Redis (implement this method based on your Redis setup)"""
-        # This would be implemented with your Redis client
-        # Example:
-        # redis_client.set(
-        #     f"group_buy:{group_buy.id}",
-        #     json.dumps(jsonable_encoder(group_buy)),
-        #     ex=3600  # expire in 1 hour
-        # )
-        pass
-    
-    def _remove_from_cache(self, group_buy_id: int) -> None:
-        """Remove group buy from Redis cache"""
-        # This would be implemented with your Redis client
-        # Example:
-        # redis_client.delete(f"group_buy:{group_buy_id}")
-        pass
-
-
-class ProductCRUD:
-    """CRUD operations for Product"""
-    
-    def create(self, db: Session, *, obj_in: ProductCreate, group_buy_id: int) -> Product:
-        """Create a new product"""
+    def create(self, db: Session, *, obj_in: GroupBuyCreate, organizer_id: int) -> GroupBuy:
         obj_in_data = jsonable_encoder(obj_in)
-        db_obj = Product(**obj_in_data, group_buy_id=group_buy_id)
+        db_obj = GroupBuy(**obj_in_data, organizer_id=organizer_id)
+        
+        # If is_visible is True, set status to active
+        if db_obj.is_visible:
+            db_obj.status = GroupBuyStatus.active
+        
         db.add(db_obj)
         db.commit()
         db.refresh(db_obj)
         return db_obj
     
-    def get(self, db: Session, id: int) -> Optional[Product]:
-        """Get a product by ID"""
-        return db.query(Product).filter(Product.id == id).first()
-    
-    def get_multi(
-        self, db: Session, *, group_buy_id: int, skip: int = 0, limit: int = 100
-    ) -> List[Product]:
-        """Get multiple products by group buy ID"""
-        return (
-            db.query(Product)
-            .filter(Product.group_buy_id == group_buy_id)
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-    
     def update(
-        self, db: Session, *, db_obj: Product, obj_in: Union[ProductUpdate, Dict[str, Any]]
-    ) -> Product:
-        """Update a product"""
+        self, 
+        db: Session, 
+        *, 
+        db_obj: GroupBuy,
+        obj_in: Union[GroupBuyUpdate, Dict[str, Any]]
+    ) -> GroupBuy:
         obj_data = jsonable_encoder(db_obj)
         
         if isinstance(obj_in, dict):
@@ -213,131 +100,103 @@ class ProductCRUD:
             if field in update_data:
                 setattr(db_obj, field, update_data[field])
         
-        db_obj.updated_at = datetime.utcnow()
+        # If is_visible is updated to True and status is draft, set status to active
+        if "is_visible" in update_data and update_data["is_visible"] and db_obj.status == GroupBuyStatus.draft:
+            db_obj.status = GroupBuyStatus.active
+        
         db.add(db_obj)
         db.commit()
         db.refresh(db_obj)
         return db_obj
     
     def delete(self, db: Session, *, id: int) -> bool:
-        """Delete a product"""
-        obj = db.query(Product).get(id)
+        obj = db.query(GroupBuy).get(id)
         if not obj:
             return False
+        
         db.delete(obj)
         db.commit()
         return True
 
 
-class OrderCRUD:
-    """CRUD operations for Order"""
+# ========== Product CRUD ==========
+
+class ProductCRUD:
+    def get(self, db: Session, id: int) -> Optional[Product]:
+        return db.query(Product).filter(Product.id == id).first()
     
-    def create_or_update_cart(
-        self, db: Session, *, user_id: int, group_buy_id: int, product_id: int, quantity: int
-    ) -> Order:
-        """Create a new order or update cart"""
-        # Check if user already has a cart for this group buy
-        order = (
-            db.query(Order)
-            .filter(
-                Order.user_id == user_id,
-                Order.group_buy_id == group_buy_id,
-                Order.status == "cart"
-            )
-            .first()
-        )
+    def get_multi(
+        self, 
+        db: Session, 
+        *, 
+        skip: int = 0, 
+        limit: int = 100,
+        group_buy_id: Optional[int] = None
+    ) -> List[Product]:
+        query = db.query(Product)
         
-        # If no cart exists, create one
-        if not order:
-            order = Order(
-                user_id=user_id,
-                group_buy_id=group_buy_id,
-                status="cart"
-            )
-            db.add(order)
-            db.commit()
-            db.refresh(order)
+        if group_buy_id:
+            query = query.filter(Product.group_buy_id == group_buy_id)
         
-        # Check if the product is already in the cart
-        order_item = (
-            db.query(OrderItem)
-            .filter(
-                OrderItem.order_id == order.id,
-                OrderItem.product_id == product_id
-            )
-            .first()
-        )
-        
-        # Get product info for price
-        product = db.query(Product).get(product_id)
-        if not product:
-            raise ValueError("Product not found")
-        
-        # If product already in cart, update quantity
-        if order_item:
-            if quantity <= 0:
-                # Remove item if quantity is 0 or negative
-                db.delete(order_item)
-            else:
-                order_item.quantity = quantity
-                order_item.price = product.price
-                db.add(order_item)
-        else:
-            # Add new item to cart
-            if quantity > 0:
-                order_item = OrderItem(
-                    order_id=order.id,
-                    product_id=product_id,
-                    quantity=quantity,
-                    price=product.price
-                )
-                db.add(order_item)
-        
-        # Recalculate order total
-        self._recalculate_order_total(db, order)
-        
-        return order
+        return query.offset(skip).limit(limit).all()
     
-    def get_user_orders(
-        self, db: Session, *, user_id: int, skip: int = 0, limit: int = 100
-    ) -> List[Order]:
-        """Get orders by user ID"""
-        return (
-            db.query(Order)
-            .filter(Order.user_id == user_id)
-            .order_by(Order.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-    
-    def get_group_buy_orders(
-        self, db: Session, *, group_buy_id: int, skip: int = 0, limit: int = 100
-    ) -> List[Order]:
-        """Get orders by group buy ID"""
-        return (
-            db.query(Order)
-            .filter(Order.group_buy_id == group_buy_id)
-            .order_by(Order.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-    
-    def _recalculate_order_total(self, db: Session, order: Order) -> None:
-        """Recalculate order total"""
-        total = db.query(func.sum(OrderItem.price * OrderItem.quantity)).filter(
-            OrderItem.order_id == order.id
-        ).scalar() or 0.0
+    def create(self, db: Session, *, obj_in: ProductCreate, group_buy_id: int) -> Product:
+        obj_in_data = jsonable_encoder(obj_in)
+        db_obj = Product(**obj_in_data, group_buy_id=group_buy_id)
         
-        order.total_amount = total
-        order.updated_at = datetime.utcnow()
-        db.add(order)
+        # Get the group buy to access fee_percent
+        db_group_buy = db.query(GroupBuy).filter(GroupBuy.id == group_buy_id).first()
+        
+        # Calculate price with fee
+        if db_group_buy:
+            # We don't store this in the DB, it will be calculated on demand
+            db_obj.price_with_fee = round(db_obj.price * (1 + db_group_buy.fee_percent / 100), 2)
+        
+        db.add(db_obj)
         db.commit()
-        db.refresh(order)
+        db.refresh(db_obj)
+        return db_obj
+    
+    def update(
+        self, 
+        db: Session, 
+        *, 
+        db_obj: Product,
+        obj_in: Union[ProductUpdate, Dict[str, Any]]
+    ) -> Product:
+        obj_data = jsonable_encoder(db_obj)
+        
+        if isinstance(obj_in, dict):
+            update_data = obj_in
+        else:
+            update_data = obj_in.dict(exclude_unset=True)
+        
+        for field in obj_data:
+            if field in update_data:
+                setattr(db_obj, field, update_data[field])
+        
+        # Get the group buy to access fee_percent for recalculation
+        db_group_buy = db.query(GroupBuy).filter(GroupBuy.id == db_obj.group_buy_id).first()
+        
+        # Recalculate price with fee if price was updated or group_buy was found
+        if ("price" in update_data or not hasattr(db_obj, 'price_with_fee')) and db_group_buy:
+            db_obj.price_with_fee = round(db_obj.price * (1 + db_group_buy.fee_percent / 100), 2)
+        
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
+    
+    def delete(self, db: Session, *, id: int) -> bool:
+        obj = db.query(Product).get(id)
+        if not obj:
+            return False
+        
+        db.delete(obj)
+        db.commit()
+        return True
 
 
-# Create instances for exports
+# Create instances
 group_buy = GroupBuyCRUD()
 product = ProductCRUD()
-order = OrderCRUD()

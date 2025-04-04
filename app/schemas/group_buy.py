@@ -1,5 +1,5 @@
 # app/schemas/group_buy.py
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 from app.models.group_buy import GroupBuyStatus, GroupBuyCategory
@@ -14,7 +14,17 @@ class GroupBuyBase(BaseModel):
     supplier: str
     min_order_amount: float = Field(default=5000.0, ge=0)
     end_date: datetime
-    fee_percent: float = Field(default=5.0, ge=0, le=25.0)
+    fee_percent: float = Field(
+        default=5.0, 
+        ge=0, 
+        le=25.0, 
+        description="Комиссия организатора в процентах (прибавляется к стоимости товаров)"
+    )
+    delivery_time: int = Field(default=21, ge=1, description="Ожидаемое время доставки в днях")
+    delivery_location: str = "Новосибирск"
+    transportation_cost: Optional[str] = None
+    participation_terms: Optional[str] = None
+    image_url: Optional[str] = None
     allow_partial_purchase: bool = True
     is_visible: bool = True
 
@@ -32,7 +42,17 @@ class GroupBuyUpdate(BaseModel):
     supplier: Optional[str] = None
     min_order_amount: Optional[float] = Field(default=None, ge=0)
     end_date: Optional[datetime] = None
-    fee_percent: Optional[float] = Field(default=None, ge=0, le=25.0)
+    fee_percent: Optional[float] = Field(
+        default=None, 
+        ge=0, 
+        le=25.0, 
+        description="Комиссия организатора в процентах"
+    )
+    delivery_time: Optional[int] = Field(default=None, ge=1)
+    delivery_location: Optional[str] = None
+    transportation_cost: Optional[str] = None
+    participation_terms: Optional[str] = None
+    image_url: Optional[str] = None
     allow_partial_purchase: Optional[bool] = None
     is_visible: Optional[bool] = None
     status: Optional[GroupBuyStatus] = None
@@ -96,9 +116,29 @@ class ProductResponse(ProductBase):
     updated_at: datetime
     quantity_ordered: int = 0
     
-    class Config:
-        orm_mode = True
-
+    # Вычисляемое поле для отображения цены с учетом комиссии
+    price_with_fee: Optional[float] = None
+    
+    @field_validator('price_with_fee')
+    def calculate_price_with_fee(cls, v, info):
+        price = info.data.get('price', 0)
+        group_buy_id = info.data.get('group_buy_id')
+        
+        if price and group_buy_id:
+            try:
+                # Получаем данные о закупке из контекста
+                from app.crud.group_buy import group_buy
+                from app.db.session import SessionLocal
+                
+                with SessionLocal() as db:
+                    db_group_buy = group_buy.get(db, id=group_buy_id)
+                    if db_group_buy:
+                        # Рассчитываем цену с учетом комиссии
+                        fee_percent = db_group_buy.fee_percent
+                        return round(price * (1 + fee_percent / 100), 2)
+            except:
+                pass
+        return price 
 
 # ========== Order Schemas ==========
 class OrderItemCreate(BaseModel):

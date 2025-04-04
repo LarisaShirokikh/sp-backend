@@ -23,6 +23,7 @@ class GroupBuyCategory(str, enum.Enum):
     kids = "kids"  # Детские товары
     food = "food"  # Продукты питания
     beauty = "beauty"  # Косметика и парфюмерия
+    school = "school"  # Школьный базар
     other = "other"  # Другое
 
 
@@ -36,7 +37,13 @@ class GroupBuy(Base):
     supplier = Column(String(255), nullable=False)
     min_order_amount = Column(Float, default=5000.0)
     end_date = Column(DateTime, nullable=False)
+    # Комиссия организатора в процентах (прибавляется к стоимости товаров)
     fee_percent = Column(Float, default=5.0)
+    delivery_time = Column(Integer, default=21)  # дни
+    delivery_location = Column(String(255), default="Новосибирск")
+    transportation_cost = Column(Text, nullable=True)
+    participation_terms = Column(Text, nullable=True)
+    image_url = Column(String, nullable=True)
     allow_partial_purchase = Column(Boolean, default=True)
     is_visible = Column(Boolean, default=True)
     status = Column(Enum(GroupBuyStatus), default=GroupBuyStatus.draft)
