@@ -84,6 +84,9 @@ class CRUDUser(CRUDBase[User, UserCreate, UserProfileUpdate]):
     def is_admin(self, user: User) -> bool:
         return user.role == "admin"
     
+    def is_super_admin(self, user: User) -> bool:
+        return user.role == "super_admin"
+    
     def is_organizer(self, user: User) -> bool:
         return any(role.role in ["organizer", "admin"] for role in user.roles)
     

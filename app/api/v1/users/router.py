@@ -25,11 +25,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/me", response_model=UserResponse)
-async def get_current_user(current_user: User = Depends(get_current_user)):
-    return {
-        **current_user.__dict__,
-        "roles": [r.role for r in current_user.roles]  # ← сериализуем как список строк
-    }
+async def get_current_user_route(current_user: User = Depends(get_current_user)):
+    """Получение информации о текущем пользователе с корректными ролями"""
+    print(f"DEBUG: User ID: {current_user.id}, is_superuser: {current_user.is_superuser}")
+    if hasattr(current_user, "roles") and current_user.roles:
+        print(f"DEBUG: User roles from DB: {[r.role for r in current_user.roles]}")
+    else:
+        print("DEBUG: User has no roles in DB")
+    
+    serialized_user = serialize_user(current_user)
+    print(f"DEBUG: Serialized roles: {serialized_user['roles']}")
+    
+    return serialized_user
 
 @router.patch("/me", response_model=UserProfileUpdate)
 async def update_user_profile(
@@ -145,6 +152,8 @@ def get_users_by_ids(
     users = db.query(User).filter(User.id.in_(ids)).all()
     if not users:
         raise HTTPException(status_code=404, detail="Пользователи не найдены")
+    
+    # Сериализуем пользователей с полем roles
     return [serialize_user(user) for user in users]
     
 @router.post("/me/send-email-verification", response_model=Any)
