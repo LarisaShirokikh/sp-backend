@@ -1,21 +1,22 @@
+version: '3.8'
 
 services:
   db:
     image: postgres:15-alpine
-    container_name: db
+    container_name: sp_db
     restart: always
     environment:
       - POSTGRES_USER=${POSTGRES_USERNAME}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
-      - postgresql_db_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
 
   redis:
     image: redis:7-alpine
-    container_name: redis
+    container_name: sp_redis
     restart: always
     ports:
       - "6379:6379"
@@ -24,12 +25,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: web
+    container_name: sp_web
     restart: always
-    entrypoint: []
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
-      - ./:/app
+      - .:/app
     ports:
       - "8000:8000"
     environment:
@@ -38,23 +38,26 @@ services:
     depends_on:
       - db
       - redis
+    env_file:
+      - .env
 
   celery_worker:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: celery_worker
+    container_name: sp_celery
     restart: always
-    entrypoint: []
     command: celery -A app.tasks.celery worker --loglevel=info
     volumes:
-      - ./app:/usr/src/app/app
+      - .:/app
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
     depends_on:
       - redis
       - db
+    env_file:
+      - .env
 
 volumes:
-  postgresql_db_data:
+  postgres_data:

@@ -28,7 +28,6 @@ from app.utils.serialization import serialize_user
 
 router = APIRouter()
 
-# === AUTH ===
 
 @router.post("/login", response_model=AuthResponse)
 async def login_access_token(
@@ -96,7 +95,7 @@ async def register_user_endpoint(
             user.id, timedelta(days=30), "refresh", request
         )
 
-        # Создаём JSON-ответ с автоматической сериализацией Pydantic-моделей
+       
         response = JSONResponse(
             status_code=status.HTTP_201_CREATED,
             content=jsonable_encoder({
@@ -126,7 +125,7 @@ async def register_user_endpoint(
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-# === LOGOUT ===
+
 
 @router.post("/logout")
 async def logout(request: Request):
@@ -152,7 +151,7 @@ async def logout(request: Request):
     response.delete_cookie("refresh_token")
     return response
 
-# === REFRESH ===
+
 
 @router.post("/refresh")
 async def refresh_token(request: Request):
@@ -177,7 +176,7 @@ async def refresh_token(request: Request):
     response.set_cookie("refresh_token", new_refresh_token, httponly=True, secure=True, samesite="Lax", max_age=30 * 24 * 60 * 60)
     return response
 
-# === ДРУГОЕ ===
+
 
 @router.get("/sessions")
 async def list_sessions(current_user: User = Depends(get_current_user)):

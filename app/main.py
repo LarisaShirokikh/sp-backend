@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
-from app.api.v1.router import router
+from app.api.router import router
 from app.models import *
 
 app = FastAPI(
@@ -14,10 +14,10 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # URL вашего фронтенда
+    allow_origins=["http://localhost:3001"], 
     allow_credentials=True,
-    allow_methods=["*"],  # Или конкретные методы ["GET", "POST"]
-    allow_headers=["*"],  # Или конкретные заголовки
+    allow_methods=["*"],  
+    allow_headers=["*"],  
 )
 app.mount("/media", StaticFiles(directory="media"), name="media")
 
