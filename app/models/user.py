@@ -48,7 +48,11 @@ class User(Base):
 
 class UserRoleAssociation(Base):
     __tablename__ = "user_roles"
+    id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
     role = Column(String, primary_key=True)
 
     user = relationship("User", back_populates="roles")
+
+
+

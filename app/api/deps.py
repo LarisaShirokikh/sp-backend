@@ -96,3 +96,17 @@ def get_current_admin(
             detail="Недостаточно прав"
         )
     return current_user
+
+
+def get_current_active_superuser(
+    current_user: models.User = Depends(get_current_active_user),
+) -> models.User:
+    """
+    Проверка является ли пользователь суперадмином
+    """
+    if not user_crud.is_super_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Пользователь не является суперадминистратором"
+        )
+    return current_user

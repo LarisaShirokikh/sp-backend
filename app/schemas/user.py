@@ -136,3 +136,20 @@ class UserLogin(BaseModel):
     """Схема для входа пользователя"""
     email: EmailStr
     password: str
+
+
+class UserUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+    is_verified: Optional[bool] = None
+    is_superuser: Optional[bool] = None
+    
+class UserRoleUpdateRequest(BaseModel):
+    roles: List[str]
+    
+class UserStatusUpdateRequest(BaseModel):
+    is_active: bool

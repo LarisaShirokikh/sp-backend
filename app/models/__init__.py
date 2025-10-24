@@ -11,5 +11,6 @@ __all__ = [
     "User", "UserRole",
     "CategoryModel", "TopicModel", "TagModel",
     "ActivityType",
-    "Product", "Order", "OrderItem", "GroupBuy"
+    "Product", "Order", "OrderItem", "GroupBuy",
+    
 ]

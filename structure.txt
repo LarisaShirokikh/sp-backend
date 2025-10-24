@@ -1,4 +1,5 @@
 .
+├── .DS_Store
 ├── .env
 ├── .env.example
 ├── .gitignore
@@ -12,16 +13,36 @@
 │       ├── 048fc0dcd14f_users_table.py
 │       ├── 089e325d9bde_initial.py
 │       ├── 0f3509e444dc_fix_category_table.py
+│       ├── 0f43e4336c1f_fix_group_buy_table.py
+│       ├── 11ac929db977_add_files_reple_table.py
 │       ├── 154ad97320db_users_table.py
 │       ├── 220e1b027555_fix_category_table.py
+│       ├── 232ce7777a48_group_buy_table.py
+│       ├── 2927a9ca6e9f_add_files_topic_table.py
 │       ├── 2c0bfc67fe4a_forum_table.py
 │       ├── 375a90422ac5_fix_category_table.py
 │       ├── 3a13e14669f3_migration.py
+│       ├── 3b278c4a9f23_add_files_topic_table.py
+│       ├── 416e0bc5beb6_activity_table.py
+│       ├── 41dd5bd33c54_admin_table.py
 │       ├── 4a3470973b96_users_table.py
+│       ├── 4acbb6e914b6_sp_table.py
 │       ├── 4b674f876d0e_users_table.py
 │       ├── 4b842d4e167b_users_table.py
+│       ├── 4fdc67dadfe7_user_roles_table.py
+│       ├── 51b0018dc3e0_user_roles_table.py
+│       ├── 5723434ce1a5_activity_table.py
+│       ├── 5b397e626fa6_users_table.py
+│       ├── 5d693bb400b4_user_roles_table.py
+│       ├── 68f48e7d45ac_activity_table.py
+│       ├── 6949493bc2d5_sp_table.py
+│       ├── 69b32f0c84a8_sp_table.py
+│       ├── 69c730899e96_user_roles_table.py
+│       ├── 6dffe468ebac_admin_table.py
 │       ├── 6e217a69fb75_fix_topic_table.py
 │       ├── 74bf0b81af5d_fix_topic_table.py
+│       ├── 7919dae4be99_fix_group_buy_table.py
+│       ├── 86a265942bd3_user_roles_table.py
 │       ├── 880ab5b9871b_users_table.py
 │       ├── 8b18fc715879_forum_table.py
 │       ├── 98230460b3f6_users_table.py
@@ -30,59 +51,87 @@
 │       ├── 9eb7cff252d0_fix_category_table.py
 │       ├── a66097476889_users_table.py
 │       ├── ab81b974507b_fix_forum_table.py
+│       ├── af99a4e61013_fix_group_buy_table.py
+│       ├── b3409960f383_topic_table_fix.py
 │       ├── b4f9afab0ec5_fix_forum_table.py
+│       ├── b7f361de0db9_group_buy_table.py
+│       ├── b7f87818ea8d_add_files_reple_table.py
 │       ├── bfa3795d1ba4_users_table.py
+│       ├── c17f935c86fa_activity_table.py
 │       ├── c7400f98b97c_forum_table.py
+│       ├── c7cc297e2d2f_fix_group_buy_table.py
 │       ├── cabe6ad6591e_users_table.py
 │       ├── cec1d6b35012_fix_category_table.py
 │       ├── cee1d2a76b98_migration.py
 │       ├── d19429371574_fix_category_table.py
+│       ├── d35f851c09b9_topic_table_fix.py
+│       ├── d3d05c833b26_topic_table_fix.py
 │       ├── d5aba234108b_migration.py
+│       ├── d7c6f1a42fe6_group_buy_table.py
+│       ├── dd127887d5cb_add_files_reple_table.py
+│       ├── e1bcceb9aca7_admin_table.py
 │       ├── e1c96facfc20_fix_topic_table.py
+│       ├── e6681763c461_user_roles_table.py
+│       ├── e960721ba860_activity_table.py
+│       ├── eb355b33df2b_add_files_reple_table.py
 │       ├── eb9236ae1e2e_fix_forum_table.py
-│       └── f09e6b4ca735_fix_forum_table.py
+│       ├── f021892a6e88_user_roles_table.py
+│       ├── f09e6b4ca735_fix_forum_table.py
+│       ├── f2b1b9767806_add_files_reple_table.py
+│       └── f48a1eec600d_user_table_fix.py
 ├── alembic.ini
 ├── app
 │   ├── api
 │   │   ├── deps.py
-│   │   └── v1
-│   │       ├── auth
-│   │       │   └── router.py
-│   │       ├── forum
-│   │       │   └── router.py
-│   │       ├── router.py
-│   │       ├── topic
-│   │       │   └── router.py
-│   │       └── users
-│   │           └── router.py
+│   │   └── endpoints
+│   │       ├── activities.py
+│   │       ├── admin.py
+│   │       ├── auth.py
+│   │       ├── forum.py
+│   │       ├── group.py
+│   │       ├── topic.py
+│   │       └── users.py
 │   ├── core
 │   │   ├── config.py
 │   │   ├── exceptions.py
 │   │   └── security.py
 │   ├── crud
 │   │   ├── __init__.py
+│   │   ├── activity.py
 │   │   ├── base.py
+│   │   ├── group_buy.py
+│   │   ├── order.py
 │   │   ├── topic_forum.py
 │   │   └── user.py
 │   ├── db
 │   │   ├── __init__.py
 │   │   ├── base.py
+│   │   ├── redis.py
 │   │   └── session.py
 │   ├── main.py
 │   ├── models
 │   │   ├── __init__.py
+│   │   ├── activity.py
 │   │   ├── category_forum.py
+│   │   ├── group_buy.py
 │   │   └── user.py
 │   ├── schemas
 │   │   ├── __init__.py
-│   │   ├── auth.py
+│   │   ├── activity.py
+│   │   ├── admin.py
 │   │   ├── base.py
 │   │   ├── category_forum.py
+│   │   ├── group_buy.py
+│   │   ├── response.py
+│   │   ├── stats.py
 │   │   ├── token.py
 │   │   └── user.py
 │   ├── services
+│   │   ├── activity_service.py
 │   │   ├── auth.py
 │   │   ├── category_forum.py
+│   │   ├── group_buy_service.py
+│   │   ├── token_service.py
 │   │   └── user.py
 │   ├── tasks
 │   │   ├── __init__.py
@@ -96,17 +145,32 @@
 ├── media
 │   ├── avatars
 │   │   ├── 1_20250323151724_bc33eb53-3e27-4a06-8841-1d74d0d1dddd.jpg
+│   │   ├── 7_20250329184746_4132bca9-faa2-454d-a31f-ff6963f9a5c2.jpg
 │   │   ├── 9_20250321134319_d13a6ee2-96d0-43f7-a209-701db1e10fd5.jpg
 │   │   ├── 9_20250321140602_e7fad32a-69cb-4a9d-b40e-de562341f4d4.jpg
 │   │   ├── 9_20250321144609_3746cfd5-1e99-44f4-80ec-fd08096010b6.jpg
 │   │   └── 9_20250322165016_371804e7-b997-4803-a8b3-09106db1b2b6.jpg
-│   └── covers
-│       ├── 1_20250323151749_7079e6a5-d373-4f27-90c7-d052ce6b6096.jpg
-│       ├── 9_20250322164928_410090f6-cfc0-496d-9537-44af24e030b8.jpg
-│       └── 9_20250322170927_3390ad5c-8137-4549-bc22-a88d0889dd1f.jpg
+│   ├── covers
+│   │   ├── 1_20250323151749_7079e6a5-d373-4f27-90c7-d052ce6b6096.jpg
+│   │   ├── 7_20250329184828_f9e3cec8-3588-40e7-8d3d-686c10122a37.jpg
+│   │   ├── 9_20250322164928_410090f6-cfc0-496d-9537-44af24e030b8.jpg
+│   │   └── 9_20250322170927_3390ad5c-8137-4549-bc22-a88d0889dd1f.jpg
+│   └── topics
+│       ├── 12.jpg
+│       ├── 55.jpg
+│       ├── topic_12
+│       │   ├── 9.jpg
+│       │   ├── reply_2
+│       │   │   └── vpr_-matematika_-5kl_-15-trenirov_-var_konnova-i-dr_2020-160s_4.pdf
+│       │   ├── reply_3
+│       │   │   └── vpr_-matematika_-5kl_-15-trenirov_-var_konnova-i-dr_2020-160s_4.pdf
+│       │   └── reply_4
+│       │       └── vpr_-matematika_-5kl_-15-trenirov_-var_konnova-i-dr_2020-160s_4.pdf
+│       └── topic_15
+│           └── 3.jpg
 ├── poetry.lock
 ├── pyproject.toml
 ├── structure.txt
 └── tests
 
-22 directories, 88 files
+24 directories, 150 files

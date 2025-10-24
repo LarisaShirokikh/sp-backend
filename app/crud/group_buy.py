@@ -2,16 +2,19 @@
 
 from typing import Any, Dict, Optional, List, Union
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_
+from sqlalchemy import desc, func, and_, or_
 from fastapi.encoders import jsonable_encoder
 
-from app.models.group_buy import GroupBuy, Product, Order, GroupBuyStatus
+from app.models.group_buy import GroupBuy, OrderItem, Product, Order, GroupBuyStatus
 from app.schemas.group_buy import GroupBuyCreate, GroupBuyUpdate, ProductCreate, ProductUpdate
 
 
-# ========== GroupBuy CRUD ==========
 
 class GroupBuyCRUD:
+    def __init__(self):
+        # Define the model attribute to fix the error
+        self.model = GroupBuy
+
     def get(self, db: Session, id: int) -> Optional[GroupBuy]:
         return db.query(GroupBuy).filter(GroupBuy.id == id).first()
     
@@ -21,28 +24,95 @@ class GroupBuyCRUD:
         *, 
         skip: int = 0, 
         limit: int = 100,
-        filters: Optional[Dict[str, Any]] = None
+        filters: Optional[Dict[str, Any]] = None,
+        sort_by: str = "created_at",
+        sort_order: str = "desc"
     ) -> List[GroupBuy]:
-        filters = filters or {}
-        query = db.query(GroupBuy)
+        """
+        Get multiple group buys with filtering and sorting
+        """
+        query = db.query(self.model)
         
         # Apply filters
-        if filters.get("category"):
-            query = query.filter(GroupBuy.category == filters["category"])
+        if filters:
+            if "organizer_id" in filters:
+                query = query.filter(self.model.organizer_id == filters["organizer_id"])
+                
+            if "status" in filters:
+                query = query.filter(self.model.status == filters["status"])
+                
+            if "category" in filters:
+                query = query.filter(self.model.category == filters["category"])
+                
+            if "is_visible" in filters:
+                query = query.filter(self.model.is_visible == filters["is_visible"])
+                
+            if "active_only" in filters:
+                query = query.filter(self.model.status.in_(["active", "collecting", "payment", "ordered"]))
+                
+            if "search" in filters and filters["search"]:
+                search_term = f"%{filters['search']}%"
+                query = query.filter(
+                    or_(
+                        self.model.title.ilike(search_term),
+                        self.model.description.ilike(search_term)
+                    )
+                )
+                
+            if "created_after" in filters:
+                query = query.filter(self.model.created_at >= filters["created_after"])
+                
+            if "created_before" in filters:
+                query = query.filter(self.model.created_at <= filters["created_before"])
         
-        if filters.get("status"):
-            query = query.filter(GroupBuy.status == filters["status"])
+        # Apply sorting
+        if sort_order.lower() == "desc":
+            query = query.order_by(desc(getattr(self.model, sort_by)))
+        else:
+            query = query.order_by(getattr(self.model, sort_by))
+            
+        # Apply pagination
+        query = query.offset(skip).limit(limit)
         
-        if filters.get("organizer_id"):
-            query = query.filter(GroupBuy.organizer_id == filters["organizer_id"])
+        # Get results
+        return query.all()
+    
+    
+    def count(
+        self, 
+        db: Session, 
+        *,
+        filters: Optional[Dict[str, Any]] = None
+    ) -> int:
+        """
+        Count group buys with filtering
+        """
+        query = db.query(func.count(self.model.id))
         
-        if filters.get("is_visible") is not None:
-            query = query.filter(GroupBuy.is_visible == filters["is_visible"])
+        # Apply filters
+        if filters:
+            if "organizer_id" in filters:
+                query = query.filter(self.model.organizer_id == filters["organizer_id"])
+                
+            if "status" in filters:
+                query = query.filter(self.model.status == filters["status"])
+                
+            if "category" in filters:
+                query = query.filter(self.model.category == filters["category"])
+                
+            if "is_visible" in filters:
+                query = query.filter(self.model.is_visible == filters["is_visible"])
+                
+            if "active_only" in filters:
+                query = query.filter(self.model.status.in_(["active", "collecting", "payment", "ordered"]))
+                
+            if "created_after" in filters:
+                query = query.filter(self.model.created_at >= filters["created_after"])
+                
+            if "created_before" in filters:
+                query = query.filter(self.model.created_at <= filters["created_before"])
         
-        if filters.get("active_only"):
-            query = query.filter(GroupBuy.status == GroupBuyStatus.active)
-        
-        return query.offset(skip).limit(limit).all()
+        return query.scalar() or 0
     
     def get_with_products_count(self, db: Session, id: int) -> Optional[Dict]:
         # Get group buy with joined product count
@@ -119,9 +189,12 @@ class GroupBuyCRUD:
         return True
 
 
-# ========== Product CRUD ==========
 
 class ProductCRUD:
+    def __init__(self):
+        # Define the model attribute
+        self.model = Product
+        
     def get(self, db: Session, id: int) -> Optional[Product]:
         return db.query(Product).filter(Product.id == id).first()
     
@@ -195,8 +268,82 @@ class ProductCRUD:
         db.delete(obj)
         db.commit()
         return True
+    
 
 
-# Create instances
+class ParticipantCRUD:
+    def get_participants(
+        self,
+        db: Session,
+        *,
+        group_buy_id: int,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[Dict]:
+        """
+        Get participants for a specific group buy
+        """
+        from app.models.group_buy import Order, OrderStatus
+        from app.models.user import User
+        
+        # Query orders with users for this group buy
+        orders_with_users = (
+            db.query(Order, User)
+            .join(User, Order.user_id == User.id)
+            .filter(
+                Order.group_buy_id == group_buy_id,
+                Order.status.in_([OrderStatus.paid, OrderStatus.completed])
+            )
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+        
+        # Format the response
+        participants = []
+        for order, user in orders_with_users:
+            # Calculate total quantity from order items
+            total_quantity = db.query(func.sum(OrderItem.quantity)).filter(
+                OrderItem.order_id == order.id
+            ).scalar() or 0
+            
+            participant_data = {
+                "id": str(user.id),
+                "name": user.name,
+                "avatar": user.image if hasattr(user, 'image') and user.image else None,
+                "quantity": total_quantity,
+                "amount": order.total_amount,
+                "isPaid": order.status in [OrderStatus.paid, OrderStatus.completed]
+            }
+            
+            participants.append(participant_data)
+        
+        return participants
+    
+    def count_participants(
+        self,
+        db: Session,
+        *,
+        group_buy_id: int
+    ) -> int:
+        """
+        Count participants for a specific group buy
+        """
+        from app.models.group_buy import Order, OrderStatus
+        
+        # Count unique users with paid or completed orders
+        participant_count = (
+            db.query(func.count(func.distinct(Order.user_id)))
+            .filter(
+                Order.group_buy_id == group_buy_id,
+                Order.status.in_([OrderStatus.paid, OrderStatus.completed])
+            )
+            .scalar()
+        ) or 0
+        
+        return participant_count
+
+# Create instance
+participant = ParticipantCRUD()
 group_buy = GroupBuyCRUD()
 product = ProductCRUD()

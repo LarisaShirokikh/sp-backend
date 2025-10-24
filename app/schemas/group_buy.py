@@ -1,6 +1,6 @@
 # app/schemas/group_buy.py
-from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List
+from pydantic import BaseModel, Field, field_validator, model_validator
+from typing import Any, Dict, Optional, List
 from datetime import datetime
 from app.models.group_buy import GroupBuyStatus, GroupBuyCategory
 
@@ -20,13 +20,29 @@ class GroupBuyBase(BaseModel):
         le=25.0, 
         description="Комиссия организатора в процентах (прибавляется к стоимости товаров)"
     )
-    delivery_time: int = Field(default=21, ge=1, description="Ожидаемое время доставки в днях")
-    delivery_location: str = "Новосибирск"
+    # Теперь используем Optional[int] вместо int
+    delivery_time: Optional[int] = Field(default=21, ge=1, description="Ожидаемое время доставки в днях")
+    delivery_location: Optional[str] = "Новосибирск"
     transportation_cost: Optional[str] = None
     participation_terms: Optional[str] = None
     image_url: Optional[str] = None
     allow_partial_purchase: bool = True
     is_visible: bool = True
+
+    
+    @model_validator(mode="after")
+    def set_defaults_for_none(self):
+        if self.delivery_time is None:
+            self.delivery_time = 21
+        if self.delivery_location is None:
+            self.delivery_location = "Новосибирск"
+        return self
+
+    class Config:
+        # Эти опции помогают при конвертации из ORM объектов
+        from_attributes = True
+        # Для обратной совместимости с предыдущими версиями Pydantic
+        orm_mode = True
 
 
 class GroupBuyCreate(GroupBuyBase):
